@@ -9,7 +9,8 @@ export async function GET(_req: Request, { params }: RouteContext<"/uploads/[fil
   return new Response(new Uint8Array(data), {
     headers: {
       "Content-Type": UPLOAD_TYPES[file.split(".").pop()!],
-      "Cache-Control": "public, max-age=31536000, immutable",
+      // s-maxage lets Vercel's CDN cache it too, so repeat views skip the function.
+      "Cache-Control": "public, max-age=31536000, s-maxage=31536000, immutable",
     },
   });
 }

@@ -205,6 +205,39 @@ export const defaultEvents: PastEvent[] = [
   },
 ];
 
+/** How customers pay the downpayment. Edited by staff at /admin/settings. */
+export type PaymentSettings = {
+  /** Percent of the total due up front, 0–100. */
+  downpaymentPercent: number;
+  /** e.g. "GCash", "Maya", "InstaPay". */
+  methodName: string;
+  accountName: string;
+  accountNumber: string;
+  /** Uploaded QR image (file name in the uploads store), or null. */
+  qrPhoto: string | null;
+  /** Hours the customer has to pay before staff may release the slot. */
+  paymentWindowHours: number;
+  /** Extra instructions shown in the email and on the booking page. */
+  instructions: string;
+  /** Where new-booking alerts go. Empty to turn them off. */
+  staffNotifyEmail: string;
+};
+
+export const defaultPaymentSettings: PaymentSettings = {
+  downpaymentPercent: 50,
+  methodName: "GCash",
+  accountName: "",
+  accountNumber: "",
+  qrPhoto: null,
+  paymentWindowHours: 24,
+  instructions: "Scan the QR code, pay the downpayment, then enter your payment reference number on your booking page.",
+  staffNotifyEmail: "",
+};
+
+export function downpaymentFor(total: number, percent: number) {
+  return Math.ceil((total * percent) / 100);
+}
+
 export function formatMoney(amount: number): string {
   return new Intl.NumberFormat(facility.locale, {
     style: "currency",

@@ -83,7 +83,7 @@ export default async function Home() {
           {[
             ["1", "Pick a sport", "Pickleball, badminton, tennis and more — all under one roof."],
             ["2", "Choose a slot", `See live availability for every court up to ${facility.bookingWindowDays} days ahead.`],
-            ["3", "Show up & play", "Get a booking reference instantly. Pay at the front desk."],
+            ["3", "Pay & play", "Once approved, we email a QR code for the downpayment. Pay the balance at the front desk."],
           ].map(([n, title, body]) => (
             <div key={n}>
               <span className="grid h-10 w-10 place-items-center rounded-full bg-lime-200 font-bold text-emerald-900">

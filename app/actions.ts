@@ -1,9 +1,12 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { after } from "next/server";
 import { getActivity } from "@/lib/activities";
-import { requireStaff } from "@/lib/auth";
-import { insertBooking, listBookings, setBookingStatus } from "@/lib/store";
+import { staffNewBookingEmail } from "@/lib/emails";
+import { sendMail } from "@/lib/mailer";
+import { siteUrl } from "@/lib/site-url";
+import { getBookingByToken, holdsSlot, insertBooking, listBookings, readSettings, updateBooking } from "@/lib/store";
 import { bookableDates, facilityNow, isValidDate } from "@/lib/time";
 
 export type Availability = {
@@ -21,14 +24,15 @@ export async function getAvailability(activitySlug: string, date: string): Promi
   const bookings = await listBookings({ activitySlug, date });
   const booked: Record<string, number[]> = {};
   for (const b of bookings) {
-    if (b.status !== "confirmed") continue;
+    if (!holdsSlot(b)) continue;
     for (let h = b.startHour; h < b.startHour + b.hours; h++) (booked[b.resourceId] ??= []).push(h);
   }
   const now = facilityNow();
   return { date, currentHour: now.date === date ? now.hour : null, booked };
 }
 
-export type BookingResult = { ok: true; id: string } | { ok: false; error: string };
+/** `token` is the secret for the confirmation link, not the booking reference. */
+export type BookingResult = { ok: true; token: string } | { ok: false; error: string };
 
 export async function createBooking(input: {
   activitySlug: string;
@@ -80,12 +84,36 @@ export async function createBooking(input: {
     total: activity.pricePerHour * hours,
   });
   if (!booking) return { ok: false, error: "Sorry — someone just booked that slot. Please pick another time." };
-  return { ok: true, id: booking.id };
+
+  // Alert staff without making the customer wait for the email.
+  const { staffNotifyEmail } = await readSettings();
+  if (staffNotifyEmail) {
+    const base = await siteUrl();
+    after(async () => {
+      const result = await sendMail(
+        staffNewBookingEmail({ booking, activity, link: `${base}/bookings/${booking.accessToken}` }, staffNotifyEmail, `${base}/admin`),
+      );
+      if (!result.ok) console.error("Staff alert email failed:", result.detail);
+    });
+  }
+  return { ok: true, token: booking.accessToken! };
 }
 
-/** Staff only. */
-export async function cancelBooking(id: string) {
-  await requireStaff();
-  await setBookingStatus(id, "cancelled");
+/**
+ * Customer tells us they paid. Authorised by the secret booking-link token;
+ * staff still verify the payment before confirming.
+ */
+export async function submitPaymentReference(token: string, reference: string): Promise<{ ok: boolean; error?: string }> {
+  const ref = reference.trim();
+  if (!/^[A-Za-z0-9 -]{4,40}$/.test(ref)) return { ok: false, error: "Enter the reference number from your payment receipt." };
+  const booking = await getBookingByToken(token);
+  if (!booking) return { ok: false, error: "Booking not found." };
+  if (booking.status !== "awaiting_payment") return { ok: false, error: "This booking isn't waiting for a payment." };
+  await updateBooking(booking.id, (b) => {
+    b.paymentRef = ref;
+    b.paymentSubmittedAt = new Date().toISOString();
+  });
   refresh();
+  return { ok: true };
 }
+

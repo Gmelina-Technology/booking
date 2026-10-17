@@ -4,27 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import type { PastEvent } from "@/lib/facility";
+import { resizeImage } from "@/lib/resize-image";
 import { saveEvent } from "./actions";
-
-const MAX_EDGE = 1600;
-const TARGET_BYTES = 900 * 1024;
-
-/** Shrinks a photo in the browser to at most 1600px and ~900 KB of JPEG. */
-async function resizePhoto(file: File): Promise<File> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-
-  for (let quality = 0.85; quality >= 0.4; quality -= 0.15) {
-    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", quality));
-    if (blob && blob.size <= TARGET_BYTES) return new File([blob], "photo.jpg", { type: "image/jpeg" });
-  }
-  throw new Error("Couldn't shrink that photo enough. Try a different one.");
-}
 
 export default function EventForm({
   event,
@@ -55,7 +36,7 @@ export default function EventForm({
     setError(null);
     setProcessing(true);
     try {
-      const resized = await resizePhoto(file);
+      const resized = await resizeImage(file);
       setPhoto(resized);
       setPreview(URL.createObjectURL(resized));
       setRemovePhoto(false);

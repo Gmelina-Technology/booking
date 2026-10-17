@@ -5,7 +5,7 @@ import { updateTag } from "next/cache";
 import { ACTIVITIES_TAG } from "@/lib/activities";
 import { requireStaff } from "@/lib/auth";
 import { gradients, type Activity } from "@/lib/facility";
-import { deleteActivity, listBookings, moveActivity, readActivities, upsertActivity } from "@/lib/store";
+import { deleteActivity, holdsSlot, listBookings, moveActivity, readActivities, upsertActivity } from "@/lib/store";
 import { facilityNow } from "@/lib/time";
 
 // Every action here is staff-only: each one starts with requireStaff().
@@ -67,7 +67,7 @@ export async function saveActivity(originalSlug: string | null, input: ActivityI
     if (removed.length) {
       const today = facilityNow().date;
       const upcoming = (await listBookings({ activitySlug: slug })).filter(
-        (b) => b.status === "confirmed" && b.date >= today && removed.some((r) => r.id === b.resourceId),
+        (b) => holdsSlot(b) && b.date >= today && removed.some((r) => r.id === b.resourceId),
       );
       if (upcoming.length) {
         const court = removed.find((r) => r.id === upcoming[0].resourceId)!;

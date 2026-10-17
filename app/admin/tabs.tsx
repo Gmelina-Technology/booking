@@ -7,6 +7,7 @@ const tabs = [
   { href: "/admin", label: "Bookings" },
   { href: "/admin/activities", label: "Activities" },
   { href: "/admin/events", label: "Events" },
+  { href: "/admin/settings", label: "Settings" },
 ];
 
 export default function AdminTabs() {

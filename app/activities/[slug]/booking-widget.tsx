@@ -95,7 +95,7 @@ export default function BookingWidget({ activity }: { activity: ActivityInfo }) 
         notes: String(form.get("notes") ?? ""),
       });
       if (result.ok) {
-        router.push(`/bookings/${result.id}`);
+        router.push(`/bookings/${result.token}`);
       } else {
         setError(result.error);
         load(date);
@@ -268,9 +268,11 @@ export default function BookingWidget({ activity }: { activity: ActivityInfo }) 
               disabled={submitting}
               className="w-full rounded-xl bg-emerald-700 px-6 py-3 font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
             >
-              {submitting ? "Booking…" : `Confirm booking · ${formatMoney(activity.pricePerHour * selection.hours)}`}
+              {submitting ? "Sending request…" : `Request booking · ${formatMoney(activity.pricePerHour * selection.hours)}`}
             </button>
-            <p className="text-center text-xs text-black/50">Pay at the front desk on arrival.</p>
+            <p className="text-center text-xs text-black/50">
+              We hold the slot while staff review it, then email you a QR code to pay the downpayment.
+            </p>
           </form>
         ) : (
           <>

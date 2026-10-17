@@ -4,13 +4,13 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { authConfigured, createSessionToken, SESSION_COOKIE } from "@/lib/session";
+import { clearLoginFailures, getLoginFailure, recordLoginFailure } from "@/lib/store";
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000;
 
-// Failed attempts per IP, in memory. Good enough for a single server; use a
-// shared store (Redis, database) if the site runs on several instances.
-const failures = new Map<string, { count: number; until: number }>();
+// Failed attempts are counted per IP in the store (the database in production),
+// so the lockout holds across all serverless instances.
 
 function passwordMatches(given: string, expected: string) {
   // Hash both so the comparison is constant-time regardless of length.
@@ -29,21 +29,18 @@ export async function login(_prev: string | null, form: FormData): Promise<strin
 
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0].trim() || h.get("x-real-ip") || "local";
-  const now = Date.now();
-  for (const [key, r] of failures) if (r.until <= now) failures.delete(key);
-  const record = failures.get(ip);
-  if (record && record.count >= MAX_ATTEMPTS && record.until > now) {
-    const minutes = Math.ceil((record.until - now) / 60000);
+  const record = await getLoginFailure(ip);
+  if (record && record.count >= MAX_ATTEMPTS) {
+    const minutes = Math.ceil((record.untilMs - Date.now()) / 60000);
     return `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`;
   }
 
   if (!passwordMatches(String(form.get("password") ?? ""), process.env.STAFF_PASSWORD!)) {
-    const count = record && record.until > now ? record.count + 1 : 1;
-    failures.set(ip, { count, until: now + LOCKOUT_MS });
+    await recordLoginFailure(ip, LOCKOUT_MS);
     return "Wrong password.";
   }
 
-  failures.delete(ip);
+  await clearLoginFailures(ip);
   const { token, expires } = await createSessionToken();
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
