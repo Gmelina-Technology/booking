@@ -10,10 +10,27 @@ Built with Next.js 16 (App Router, Cache Components), React 19 and Tailwind CSS 
 
 ```bash
 npm install
+cp .env.example .env.local   # then fill in STAFF_PASSWORD and SESSION_SECRET
 npm run dev
 ```
 
 Open http://localhost:3000.
+
+## Staff access
+
+The staff area isn't linked from the public site. Staff go to **`/admin`** directly (bookmark it),
+for example `https://your-domain.com/admin`. Anyone not signed in is sent to `/login`.
+
+- **Login:** one shared staff password, set with the `STAFF_PASSWORD` environment variable. Sessions
+  last 7 days in an HTTP-only cookie signed with `SESSION_SECRET`. Use the **Sign out** button in
+  the staff bar to end one.
+- **Changing the password:** update `STAFF_PASSWORD` and restart. To sign everyone out as well,
+  also change `SESSION_SECRET`.
+- **Brute-force protection:** 5 wrong passwords from one IP locks that IP out for 15 minutes.
+- **How it's enforced:** `proxy.ts` redirects signed-out visitors away from `/admin/*`. Every
+  staff server action and admin data loader also calls `requireStaff()` (`lib/auth.ts`), because
+  server actions can be called directly without visiting the page.
+- If either variable is missing, nobody can sign in. Login fails closed.
 
 ## Pages
 
@@ -22,6 +39,7 @@ Open http://localhost:3000.
 | `/` | Landing page, the activity list and the recent events showcase |
 | `/activities/[slug]` | Booking flow: date → court → time (1–N consecutive hours) → details |
 | `/bookings/[id]` | Confirmation page with the booking reference |
+| `/login` | Staff sign-in |
 | `/admin` | Staff view: bookings per day, filter by activity, cancel bookings |
 | `/admin/activities` | Staff view: add, edit, reorder, hide or delete activities |
 | `/admin/events` | Staff view: past events (with photos) shown on the home page |
@@ -63,7 +81,8 @@ see the change.
 
 ## Before going live
 
-- **Protect `/admin`.** It has no login yet, and anyone can change prices and activities there.
+- **Set `STAFF_PASSWORD` and `SESSION_SECRET`** on the host (see `.env.example`), and serve the
+  site over HTTPS so the session cookie is only sent encrypted.
 - **Replace the sample events.** The three events marked "Sample — replace me" in `/admin/events`
   are placeholders. Swap in the client's real events, or delete them.
 - **Use a real database.** A JSON file works for one server only. It does not work on serverless

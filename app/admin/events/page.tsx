@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
+import { requireStaff } from "@/lib/auth";
 import { getAllEvents, photoUrl } from "@/lib/events";
 import { formatDate } from "@/lib/time";
 import { EventRowActions } from "./row-actions";
@@ -33,6 +34,7 @@ export default function EventsAdminPage() {
 }
 
 async function EventList() {
+  await requireStaff();
   const [events, activities] = await Promise.all([getAllEvents(), getAllActivities()]);
 
   if (events.length === 0) {

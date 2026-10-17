@@ -3,12 +3,13 @@
 import { randomBytes } from "node:crypto";
 import { updateTag } from "next/cache";
 import { getAllActivities } from "@/lib/activities";
+import { requireStaff } from "@/lib/auth";
 import { EVENTS_TAG } from "@/lib/events";
 import type { PastEvent } from "@/lib/facility";
 import { deleteEvent, deleteUpload, readEvents, saveUpload, UPLOAD_TYPES, upsertEvent } from "@/lib/store";
 import { facilityNow, isValidDate } from "@/lib/time";
 
-// No auth on the admin pages yet — see README before deploying.
+// Every action here is staff-only: each one starts with requireStaff().
 
 // Photos are resized in the browser first, so they stay well under the 1 MB
 // server-action body limit.
@@ -21,6 +22,7 @@ export type SaveEventResult = { ok: true } | { ok: false; error: string };
  * summary, participants, published ("on"), photo (File, optional), removePhoto ("1").
  */
 export async function saveEvent(id: string | null, form: FormData): Promise<SaveEventResult> {
+  await requireStaff();
   const title = String(form.get("title") ?? "").trim();
   const date = String(form.get("date") ?? "");
   const activitySlug = String(form.get("activitySlug") ?? "");
@@ -65,6 +67,7 @@ export async function saveEvent(id: string | null, form: FormData): Promise<Save
 }
 
 export async function setEventPublished(id: string, published: boolean) {
+  await requireStaff();
   const event = (await readEvents()).find((e) => e.id === id);
   if (!event) return;
   await upsertEvent({ ...event, published });
@@ -72,6 +75,7 @@ export async function setEventPublished(id: string, published: boolean) {
 }
 
 export async function removeEvent(id: string) {
+  await requireStaff();
   const event = await deleteEvent(id);
   if (event?.photo) await deleteUpload(event.photo);
   updateTag(EVENTS_TAG);

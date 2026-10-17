@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getActivity } from "@/lib/activities";
+import { requireStaff } from "@/lib/auth";
 import ActivityForm from "../activity-form";
 
 export const metadata = { title: "Staff — edit activity" };
@@ -20,6 +21,7 @@ export default function EditActivityPage({ params }: PageProps<"/admin/activitie
 }
 
 async function EditActivity({ params }: { params: Promise<{ slug: string }> }) {
+  await requireStaff();
   const activity = await getActivity((await params).slug);
   if (!activity) notFound();
   return (

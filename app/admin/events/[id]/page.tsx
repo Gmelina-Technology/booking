@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
+import { requireStaff } from "@/lib/auth";
 import { getEvent } from "@/lib/events";
 import { facilityNow } from "@/lib/time";
 import EventForm from "../event-form";
@@ -25,6 +26,7 @@ export default function EditEventPage({ params }: PageProps<"/admin/events/[id]"
 async function EditEvent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   await connection();
+  await requireStaff();
   const [event, activities] = await Promise.all([getEvent(id), getAllActivities()]);
   if (!event) notFound();
   return (

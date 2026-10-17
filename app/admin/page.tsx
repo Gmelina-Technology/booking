@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
+import { requireStaff } from "@/lib/auth";
 import { formatHourRange, formatMoney } from "@/lib/facility";
 import { listBookings } from "@/lib/store";
 import { facilityNow, formatDate, isValidDate } from "@/lib/time";
@@ -8,8 +9,6 @@ import { CancelButton, Filters } from "./controls";
 
 export const metadata = { title: "Staff — bookings" };
 
-// NOTE: this page has no login yet. Protect it (auth or a proxy rule) before
-// deploying publicly.
 export default function AdminPage({ searchParams }: PageProps<"/admin">) {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
@@ -25,6 +24,7 @@ export default function AdminPage({ searchParams }: PageProps<"/admin">) {
 async function BookingsTable({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
   await connection();
+  await requireStaff();
   const today = facilityNow().date;
   const date = typeof sp.date === "string" && isValidDate(sp.date) ? sp.date : today;
   const activities = await getAllActivities();

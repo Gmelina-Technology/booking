@@ -2,6 +2,7 @@
 
 import { refresh } from "next/cache";
 import { getActivity } from "@/lib/activities";
+import { requireStaff } from "@/lib/auth";
 import { insertBooking, listBookings, setBookingStatus } from "@/lib/store";
 import { bookableDates, facilityNow, isValidDate } from "@/lib/time";
 
@@ -82,8 +83,9 @@ export async function createBooking(input: {
   return { ok: true, id: booking.id };
 }
 
-// No auth on the admin page yet — see README before deploying.
+/** Staff only. */
 export async function cancelBooking(id: string) {
+  await requireStaff();
   await setBookingStatus(id, "cancelled");
   refresh();
 }

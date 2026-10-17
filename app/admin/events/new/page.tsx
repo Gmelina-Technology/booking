@@ -2,6 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
+import { requireStaff } from "@/lib/auth";
 import { facilityNow } from "@/lib/time";
 import EventForm from "../event-form";
 
@@ -23,6 +24,7 @@ export default function NewEventPage() {
 
 async function NewEvent() {
   await connection();
+  await requireStaff();
   const activities = await getAllActivities();
   return <EventForm activities={activities.map((a) => ({ slug: a.slug, name: a.name }))} today={facilityNow().date} />;
 }

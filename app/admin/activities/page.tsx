@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
+import { requireStaff } from "@/lib/auth";
 import { formatHour, formatMoney } from "@/lib/facility";
 import { listBookings } from "@/lib/store";
 import { ActivityRowActions } from "./row-actions";
@@ -30,6 +31,7 @@ export default function ActivitiesAdminPage() {
 }
 
 async function ActivityList() {
+  await requireStaff();
   const [activities, bookings] = await Promise.all([getAllActivities(), listBookings()]);
   const bookingCount = (slug: string) => bookings.filter((b) => b.activitySlug === slug).length;
 

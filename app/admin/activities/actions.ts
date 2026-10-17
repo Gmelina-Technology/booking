@@ -3,11 +3,12 @@
 import { randomBytes } from "node:crypto";
 import { updateTag } from "next/cache";
 import { ACTIVITIES_TAG } from "@/lib/activities";
+import { requireStaff } from "@/lib/auth";
 import { gradients, type Activity } from "@/lib/facility";
 import { deleteActivity, listBookings, moveActivity, readActivities, upsertActivity } from "@/lib/store";
 import { facilityNow } from "@/lib/time";
 
-// No auth on the admin pages yet — see README before deploying.
+// Every action here is staff-only: each one starts with requireStaff().
 
 export type ActivityInput = Omit<Activity, "slug">;
 export type SaveResult = { ok: true; slug: string } | { ok: false; error: string };
@@ -43,6 +44,7 @@ function validate(input: ActivityInput): string | null {
 
 /** Creates an activity (originalSlug null) or updates an existing one. */
 export async function saveActivity(originalSlug: string | null, input: ActivityInput): Promise<SaveResult> {
+  await requireStaff();
   const error = validate(input);
   if (error) return { ok: false, error };
 
@@ -103,6 +105,7 @@ export async function saveActivity(originalSlug: string | null, input: ActivityI
 }
 
 export async function setActivityActive(slug: string, active: boolean) {
+  await requireStaff();
   const activity = (await readActivities()).find((a) => a.slug === slug);
   if (!activity) return;
   await upsertActivity({ ...activity, active });
@@ -110,11 +113,13 @@ export async function setActivityActive(slug: string, active: boolean) {
 }
 
 export async function reorderActivity(slug: string, direction: -1 | 1) {
+  await requireStaff();
   await moveActivity(slug, direction);
   updateTag(ACTIVITIES_TAG);
 }
 
 export async function removeActivity(slug: string): Promise<{ ok: boolean; error?: string }> {
+  await requireStaff();
   if ((await listBookings({ activitySlug: slug })).length > 0)
     return { ok: false, error: "This activity has bookings, so it can't be deleted. Hide it instead." };
   await deleteActivity(slug);
