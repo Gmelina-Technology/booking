@@ -205,6 +205,20 @@ export const defaultEvents: PastEvent[] = [
   },
 ];
 
+/** A photo in the home page banner collage. */
+export type BannerMoment = { src: string; caption: string; detail: string };
+
+// Stock photos (Unsplash) that fill the home banner until staff upload event
+// photos at /admin/events. Published event photos always come first; replace
+// these with the client's own shots before launch.
+const unsplash = (id: string) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=900&q=75`;
+export const defaultBannerMoments: BannerMoment[] = [
+  { src: unsplash("1512746804203-e53e69406f93"), caption: "League night", detail: "Basketball" },
+  { src: unsplash("1626224583764-f87db24ac4ea"), caption: "Club smash session", detail: "Badminton" },
+  { src: unsplash("1737476996799-ec2ee3c1e222"), caption: "Saturday open play", detail: "Pickleball" },
+  { src: unsplash("1659303388076-de1535159d6c"), caption: "Lunch-break rallies", detail: "Table Tennis" },
+];
+
 /** How customers pay the downpayment. Edited by staff at /admin/settings. */
 export type PaymentSettings = {
   /** Percent of the total due up front, 0–100. */

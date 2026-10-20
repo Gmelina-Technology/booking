@@ -17,3 +17,23 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
+
+/* Slow pan-and-zoom on the home banner photos. */
+@theme {
+  --animate-kenburns: kenburns 18s ease-in-out infinite alternate;
+
+  @keyframes kenburns {
+    from {
+      transform: scale(1) translate(0, 0);
+    }
+    to {
+      transform: scale(1.12) translate(-2%, -2%);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-kenburns {
+    animation: none;
+  }
+}
