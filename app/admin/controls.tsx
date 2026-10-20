@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { approveBooking, cancelBooking, markDownpaymentReceived, resendPaymentEmail, type StaffResult } from "./booking-actions";
 import { addDays, formatDate } from "@/lib/time";
 
@@ -100,17 +100,16 @@ Reason (optional, included in the email):`);
     run(() => cancelBooking(id, reason));
   }
 
-  const primary = "rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50";
-  const secondary = "rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs font-medium hover:border-emerald-600 disabled:opacity-50";
-  const danger = "rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50";
+  const primary = "rounded-lg bg-emerald-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50";
+  const danger = "rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50";
 
   return (
-    <div className="flex flex-col items-end gap-1.5">
-      <div className="flex flex-wrap justify-end gap-1.5">
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
         {status === "pending" && (
           <>
-            <button className={primary} disabled={pending} onClick={() => run(() => approveBooking(id))}>
-              Approve &amp; send payment QR
+            <button className={primary} disabled={pending} onClick={() => run(() => approveBooking(id))} title="Approve and email the customer the payment QR">
+              Approve &amp; send QR
             </button>
             <button className={danger} disabled={pending} onClick={() => cancel("Decline")}>
               Decline
@@ -126,22 +125,75 @@ Reason (optional, included in the email):`);
             >
               Downpayment received
             </button>
-            <button className={secondary} disabled={pending} onClick={() => run(() => resendPaymentEmail(id))}>
-              Resend email
-            </button>
-            <button className={danger} disabled={pending} onClick={() => cancel("Cancel")}>
-              Cancel
-            </button>
+            <MoreMenu
+              disabled={pending}
+              items={[
+                { label: "Resend payment email", onSelect: () => run(() => resendPaymentEmail(id)) },
+                { label: "Cancel booking", onSelect: () => cancel("Cancel"), danger: true },
+              ]}
+            />
           </>
         )}
-        {status === "confirmed" && (
-          <button className={danger} disabled={pending} onClick={() => cancel("Cancel")}>
-            Cancel
-          </button>
-        )}
+        {status === "confirmed" && <MoreMenu disabled={pending} items={[{ label: "Cancel booking", onSelect: () => cancel("Cancel"), danger: true }]} />}
       </div>
       {pending && <p className="text-xs text-black/50">Working…</p>}
       {result && <p className={`max-w-xs text-right text-xs ${result.ok ? "text-emerald-700" : "text-red-700"}`}>{result.message}</p>}
+    </div>
+  );
+}
+
+type MenuItem = { label: string; onSelect: () => void; danger?: boolean };
+
+/** "⋯" button with a small dropdown for the less common actions. Closes on outside click or Escape. */
+function MoreMenu({ items, disabled }: { items: MenuItem[]; disabled: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(e: PointerEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs font-bold leading-none text-black/60 hover:border-emerald-600 hover:text-black disabled:opacity-50"
+        disabled={disabled}
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="block py-0.5">⋯</span>
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-full z-20 mt-1 min-w-44 rounded-xl border border-black/10 bg-white py-1 text-left shadow-lg">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              role="menuitem"
+              className={`block w-full px-3 py-2 text-left text-xs font-medium hover:bg-black/5 ${item.danger ? "text-red-700" : ""}`}
+              onClick={() => {
+                setOpen(false);
+                item.onSelect();
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

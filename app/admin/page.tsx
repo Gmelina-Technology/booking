@@ -71,6 +71,15 @@ async function BookingsView({ searchParams }: { searchParams: Promise<Record<str
     return q ? `/admin?${q}` : "/admin";
   }
 
+  function rowProps(b: Booking): RowProps {
+    return {
+      b,
+      activity: activityBySlug.get(b.activitySlug),
+      showDate: !isSchedule,
+      overdueHours: overdue.has(b.id) ? settings.paymentWindowHours : null,
+    };
+  }
+
   return (
     <>
       {/* The baseline is an inset shadow so the active tab's border can cover it without
@@ -127,51 +136,42 @@ async function BookingsView({ searchParams }: { searchParams: Promise<Record<str
         </div>
       )}
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-black/5 bg-white shadow-sm">
+      <div className="mt-6 rounded-2xl border border-black/5 bg-white shadow-sm">
         {rows.length === 0 ? (
           <p className="p-10 text-center text-black/50">
             {isSchedule ? `No bookings for ${formatDate(date, { month: "long" })}.` : "No upcoming bookings here."}
           </p>
         ) : (
-          <table className="w-full min-w-[820px] text-left text-sm">
-            <thead className="border-b border-black/5 text-xs uppercase tracking-wide text-black/50">
-              <tr>
-                <th className="px-4 py-3">{isSchedule ? "Time" : "When"}</th>
-                <th className="px-4 py-3">Activity</th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Payment</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-black/5">
+          <>
+            {/* Phones and tablets: one stacked card per booking. */}
+            <ul className="divide-y divide-black/5 lg:hidden">
               {rows.map((b) => (
-                <tr key={b.id} className={b.status === "cancelled" ? "text-black/40" : ""}>
-                  <td className="whitespace-nowrap px-4 py-3 font-medium">
-                    {!isSchedule && <p>{formatDate(b.date)}</p>}
-                    <p className={isSchedule ? "" : "text-xs font-normal text-black/60"}>{formatHourRange(b.startHour, b.hours)}</p>
-                  </td>
-                  <td className="px-4 py-3">{courtLabel(b, activityBySlug.get(b.activitySlug))}</td>
-                  <td className="px-4 py-3">
-                    <Customer b={b} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={b.status} />
-                    <p className="mt-1 font-mono text-xs text-black/50">{b.id}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Payment b={b} />
-                    {overdue.has(b.id) && (
-                      <p className="mt-1 text-xs font-semibold text-red-700">Past the {settings.paymentWindowHours}h payment window</p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <BookingActions id={b.id} status={b.status} />
-                  </td>
-                </tr>
+                <li key={b.id}>
+                  <BookingCard {...rowProps(b)} />
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+            {/* Desktop: one compact row per booking. No overflow container, so the actions menu isn't clipped. */}
+            <table className="hidden w-full text-left text-sm lg:table">
+              <thead className="border-b border-black/5 text-xs uppercase tracking-wide text-black/50">
+                <tr>
+                  <th className="py-3 pl-4 pr-3 font-medium">{isSchedule ? "Time" : "When"}</th>
+                  <th className="px-3 py-3 font-medium">Activity</th>
+                  <th className="px-3 py-3 font-medium">Customer</th>
+                  <th className="px-3 py-3 font-medium">Status</th>
+                  <th className="px-3 py-3 font-medium">Payment</th>
+                  <th className="py-3 pl-3 pr-4">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/5">
+                {rows.map((b) => (
+                  <BookingRow key={b.id} {...rowProps(b)} />
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
     </>
@@ -184,48 +184,155 @@ function overdueIds(bookings: Booking[], windowHours: number) {
   return new Set(bookings.filter((b) => b.approvedAt && Date.parse(b.approvedAt) < cutoff).map((b) => b.id));
 }
 
-function courtLabel(b: Booking, activity?: Activity) {
-  const resource = activity?.resources.find((r) => r.id === b.resourceId);
-  return `${activity?.name ?? b.activitySlug} · ${resource?.name ?? b.resourceId}`;
+type RowProps = {
+  b: Booking;
+  activity?: Activity;
+  /** Status tabs span many days, so they show the date as well as the time. */
+  showDate: boolean;
+  /** The payment window in hours, when this booking is past it. */
+  overdueHours: number | null;
+};
+
+function BookingRow({ b, activity, showDate, overdueHours }: RowProps) {
+  return (
+    <tr className={`align-top ${b.status === "cancelled" ? "text-black/40" : ""}`}>
+      <td className="whitespace-nowrap py-3 pl-4 pr-3 font-medium">
+        {showDate && <p>{formatDate(b.date)}</p>}
+        <p className={showDate ? "text-xs font-normal text-black/60" : ""}>{formatHourRange(b.startHour, b.hours)}</p>
+      </td>
+      <td className="whitespace-nowrap px-3 py-3">
+        <Court b={b} activity={activity} />
+      </td>
+      {/* w-full + max-w-0: take the leftover width and truncate long text instead of widening the table. */}
+      <td className="w-full max-w-0 px-3 py-3">
+        <Customer b={b} />
+      </td>
+      <td className="px-3 py-3">
+        <Status b={b} />
+      </td>
+      <td className="px-3 py-3">
+        <Payment b={b} overdueHours={overdueHours} />
+      </td>
+      <td className="py-2.5 pl-3 pr-4">
+        <BookingActions id={b.id} status={b.status} />
+      </td>
+    </tr>
+  );
 }
 
-function Customer({ b }: { b: Booking }) {
+function BookingCard({ b, activity, showDate, overdueHours }: RowProps) {
+  return (
+    <div className={`space-y-3 p-4 text-sm ${b.status === "cancelled" ? "text-black/40" : ""}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium">
+            {showDate && <>{formatDate(b.date)} · </>}
+            {formatHourRange(b.startHour, b.hours)}
+          </p>
+          <p className="truncate">
+            <Court b={b} activity={activity} />
+          </p>
+        </div>
+        <Status b={b} className="items-end" />
+      </div>
+      <Customer b={b} />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <Payment b={b} overdueHours={overdueHours} />
+        <div className="ml-auto">
+          <BookingActions id={b.id} status={b.status} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Court({ b, activity }: { b: Booking; activity?: Activity }) {
+  const resource = activity?.resources.find((r) => r.id === b.resourceId);
   return (
     <>
-      <p className="font-medium">
-        {b.name} <span className="font-normal text-black/50">· {b.players} players</span>
-      </p>
-      <p className="text-xs text-black/50">
-        {b.phone} · {b.email}
-      </p>
-      {b.notes && <p className="mt-1 text-xs italic text-black/50">“{b.notes}”</p>}
+      {activity?.name ?? b.activitySlug} <span className="text-black/50">· {resource?.name ?? b.resourceId}</span>
     </>
   );
 }
 
-function Payment({ b }: { b: Booking }) {
-  const lastEmail = b.emails?.at(-1);
+function Customer({ b }: { b: Booking }) {
   return (
-    <div className="space-y-0.5 text-xs">
-      <p>
+    <div className="min-w-0">
+      <p className="truncate font-medium" title={`${b.name} · ${b.players} players`}>
+        {b.name} <span className="font-normal text-black/50">· {b.players} players</span>
+      </p>
+      <p className="truncate text-xs text-black/50" title={`${b.phone} · ${b.email}`}>
+        <a href={`tel:${b.phone}`} className="hover:text-emerald-700 hover:underline">
+          {b.phone}
+        </a>{" "}
+        ·{" "}
+        <a href={`mailto:${b.email}`} className="hover:text-emerald-700 hover:underline">
+          {b.email}
+        </a>
+      </p>
+      {b.notes && (
+        // One line until clicked; the full note is also the tooltip.
+        <details className="group mt-0.5 text-xs italic text-black/50">
+          <summary
+            title={b.notes}
+            className="block cursor-pointer list-none truncate hover:text-black/70 group-open:whitespace-normal [&::-webkit-details-marker]:hidden"
+          >
+            “{b.notes}”
+          </summary>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function Status({ b, className = "items-start" }: { b: Booking; className?: string }) {
+  return (
+    <div className={`flex shrink-0 flex-col gap-1 ${className}`}>
+      <StatusBadge status={b.status} />
+      <span className="font-mono text-[11px] text-black/50" title="Booking reference">
+        {b.id}
+      </span>
+    </div>
+  );
+}
+
+function Payment({ b, overdueHours }: { b: Booking; overdueHours: number | null }) {
+  const lastEmail = b.emails?.at(-1);
+  const emailLabel = lastEmail && `${lastEmail.kind.replace("_", " ")} email`;
+  return (
+    <div className="space-y-1 text-xs">
+      <p className="whitespace-nowrap">
         Total <span className="font-semibold">{formatMoney(b.total)}</span>
         {b.downpayment !== undefined && (
           <>
             {" "}
-            · Down <span className="font-semibold">{formatMoney(b.downpayment)}</span>
+            <span className="text-black/30">·</span> Down <span className="font-semibold">{formatMoney(b.downpayment)}</span>
           </>
         )}
       </p>
-      {b.paymentRef && (
-        <p className="text-amber-800">
-          Customer ref: <span className="font-mono font-semibold">{b.paymentRef}</span>
-        </p>
-      )}
-      {lastEmail && (
-        <p className={lastEmail.ok ? "text-black/40" : "font-semibold text-red-700"} title={lastEmail.detail}>
-          {lastEmail.ok ? "✓" : "✕"} {lastEmail.kind.replace("_", " ")} email
-          {lastEmail.ok ? "" : " failed"}
-        </p>
+      {(b.paymentRef || lastEmail || overdueHours !== null) && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+          {b.paymentRef && (
+            <span
+              className="whitespace-nowrap rounded bg-amber-50 px-1.5 py-0.5 text-amber-800 ring-1 ring-amber-200"
+              title="Payment reference the customer entered"
+            >
+              Customer ref <span className="font-mono font-semibold">{b.paymentRef}</span>
+            </span>
+          )}
+          {lastEmail && (
+            <span
+              className={`whitespace-nowrap ${lastEmail.ok ? "text-black/40" : "font-semibold text-red-700"}`}
+              title={lastEmail.detail ? `${emailLabel}: ${lastEmail.detail}` : emailLabel}
+            >
+              {lastEmail.ok ? "✓" : "✕"} {emailLabel}
+              {lastEmail.ok ? "" : " failed"}
+            </span>
+          )}
+          {overdueHours !== null && (
+            <span className="whitespace-nowrap font-semibold text-red-700">Past the {overdueHours}h payment window</span>
+          )}
+        </div>
       )}
     </div>
   );
