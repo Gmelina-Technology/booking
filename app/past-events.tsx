@@ -16,27 +16,30 @@ export default async function PastEvents() {
 
   return (
     <section className="bg-emerald-950 text-white">
-      <div className="mx-auto max-w-6xl px-4 py-16">
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:py-16">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <p className="text-sm font-semibold uppercase tracking-widest text-lime-300">Recent events</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight">What&apos;s been happening at {facility.name}</h2>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">What&apos;s been happening at {facility.name}</h2>
             <p className="mt-2 max-w-xl text-white/70">
               Tournaments, clinics, leagues and private events. Want to host your own? Talk to the front desk.
             </p>
           </div>
-          <dl className="flex gap-8">
+          <dl className="flex gap-6 sm:gap-8">
             <Stat value={String(events.length)} label={events.length === 1 ? "event" : "events"} />
             {totalPlayers > 0 && <Stat value={totalPlayers.toLocaleString(facility.locale)} label="players & guests" />}
             <Stat value={String(sports)} label={sports === 1 ? "sport" : "sports"} />
           </dl>
         </div>
 
-        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Phone: swipeable strip. Tablet and up: grid. */}
+        <ul className="-mx-4 mt-8 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:mt-10 sm:grid sm:grid-cols-2 sm:gap-6 sm:overflow-visible sm:px-0 sm:pb-0 md:grid-cols-3">
           {events.slice(0, MAX_SHOWN).map((event) => (
-            <EventCard key={event.id} event={event} activity={activities.find((a) => a.slug === event.activitySlug)} />
+            <li key={event.id} className="w-[80%] max-w-80 shrink-0 snap-start sm:w-auto sm:max-w-none">
+              <EventCard event={event} activity={activities.find((a) => a.slug === event.activitySlug)} />
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
     </section>
   );
@@ -53,7 +56,7 @@ function Stat({ value, label }: { value: string; label: string }) {
 
 export function EventCard({ event, activity }: { event: PastEvent; activity?: Activity }) {
   return (
-    <article className="overflow-hidden rounded-2xl bg-white text-black shadow-lg">
+    <article className="h-full overflow-hidden rounded-2xl bg-white text-black shadow-lg">
       <div className="relative aspect-[4/3]">
         {event.photo ? (
           <Image
@@ -61,7 +64,7 @@ export function EventCard({ event, activity }: { event: PastEvent; activity?: Ac
             alt={event.title}
             fill
             unoptimized
-            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+            sizes="(min-width: 768px) 33vw, (min-width: 640px) 50vw, 80vw"
             className="object-cover"
           />
         ) : (
@@ -82,7 +85,7 @@ export function EventCard({ event, activity }: { event: PastEvent; activity?: Ac
           </span>
         )}
       </div>
-      <div className="p-5">
+      <div className="p-4 sm:p-5">
         {activity && <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{activity.name}</p>}
         <h3 className="mt-1 text-lg font-semibold">{event.title}</h3>
         {event.summary && <p className="mt-1 text-sm text-black/60">{event.summary}</p>}

@@ -30,7 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               {facility.name}
             </Link>
             <nav className="flex items-center gap-1 text-sm font-medium">
-              <Link href="/#activities" className="rounded-lg px-3 py-2 hover:bg-black/5">
+              <Link href="/#activities" className="hidden rounded-lg px-3 py-2 hover:bg-black/5 sm:block">
                 Activities
               </Link>
               <Link
