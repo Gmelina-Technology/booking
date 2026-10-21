@@ -1,13 +1,13 @@
-import { facility, formatHourRange, formatMoney, type Activity, type PaymentSettings } from "./facility";
+import { formatHourRange, formatMoney, type Activity, type BusinessProfile, type PaymentSettings } from "./facility";
 import type { Mail, MailImage } from "./mailer";
 import type { Booking } from "./store";
 import { formatDate } from "./time";
 
-function esc(s: string) {
+export function esc(s: string) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-type Ctx = { booking: Booking; activity?: Activity; link: string };
+type Ctx = { booking: Booking; activity?: Activity; link: string; business: BusinessProfile };
 
 function details({ booking, activity }: Ctx) {
   const court = activity?.resources.find((r) => r.id === booking.resourceId)?.name ?? booking.resourceId;
@@ -36,20 +36,25 @@ function detailsText(ctx: Ctx, extra: string[][] = []) {
   return [...details(ctx), ...extra].map(([k, v]) => `${k}: ${v}`).join("\n");
 }
 
-function layout(heading: string, color: string, body: string) {
+function layout(business: BusinessProfile, heading: string, color: string, body: string) {
   return `<!doctype html>
 <html><body style="margin:0;background:#f7f8f4;font-family:Arial,Helvetica,sans-serif;color:#14201a">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden">
 <tr><td style="background:${color};color:#ffffff;padding:24px 28px">
-  <div style="font-size:13px;opacity:.85">${esc(facility.name)}</div>
+  <div style="font-size:13px;opacity:.85">${esc(business.name)}</div>
   <div style="font-size:22px;font-weight:700;margin-top:4px">${esc(heading)}</div>
 </td></tr>
 <tr><td style="padding:24px 28px;font-size:15px;line-height:1.5">${body}</td></tr>
 <tr><td style="padding:16px 28px;background:#f3f4f1;font-size:12px;color:#6b7280">
-  ${esc(facility.name)} · ${esc(facility.address)} · ${esc(facility.phone)}
+  ${[business.name, business.address, business.phone].filter(Boolean).map(esc).join(" · ")}
 </td></tr>
 </table></td></tr></table></body></html>`;
+}
+
+/** How customers reach the business: phone if set, else email. */
+function contact(business: BusinessProfile) {
+  return business.phone || business.email;
 }
 
 function button(link: string, label: string) {
@@ -65,6 +70,7 @@ export function paymentRequestEmail(ctx: Ctx, settings: PaymentSettings, qr: Mai
   const extra = [["Downpayment due", formatMoney(due)], ...(balance > 0 ? [["Balance at the front desk", formatMoney(balance)]] : [])];
 
   const html = layout(
+    ctx.business,
     "Your booking is approved, please pay the downpayment",
     "#047857",
     `<p>Hi ${esc(booking.name)},</p>
@@ -95,6 +101,7 @@ Enter your payment reference here: ${ctx.link}
 
   return {
     to: booking.email,
+    replyTo: ctx.business.email || undefined,
     subject: `Pay your downpayment to confirm booking ${booking.id}`,
     html,
     text,
@@ -113,8 +120,10 @@ export function confirmedEmail(ctx: Ctx): Mail {
   ];
   return {
     to: booking.email,
+    replyTo: ctx.business.email || undefined,
     subject: `Booking ${booking.id} confirmed`,
     html: layout(
+      ctx.business,
       "You're all set!",
       "#047857",
       `<p>Hi ${esc(booking.name)},</p>
@@ -139,14 +148,16 @@ export function cancelledEmail(ctx: Ctx): Mail {
   const reason = booking.cancelReason?.trim();
   return {
     to: booking.email,
+    replyTo: ctx.business.email || undefined,
     subject: `Booking ${booking.id} cancelled`,
     html: layout(
+      ctx.business,
       "Your booking was cancelled",
       "#52525b",
       `<p>Hi ${esc(booking.name)},</p>
 <p>Your booking below has been cancelled.${reason ? ` Reason: <em>${esc(reason)}</em>` : ""}</p>
 ${detailsHtml(ctx)}
-<p>Questions about a payment you've already made? Call us at ${esc(facility.phone)} and mention reference <strong>${esc(booking.id)}</strong>.</p>`,
+<p>Questions about a payment you've already made? Contact us at ${esc(contact(ctx.business))} and mention reference <strong>${esc(booking.id)}</strong>.</p>`,
     ),
     text: `Hi ${booking.name},
 
@@ -154,7 +165,7 @@ Your booking has been cancelled.${reason ? ` Reason: ${reason}` : ""}
 
 ${detailsText(ctx)}
 
-Questions about a payment? Call ${facility.phone} with reference ${booking.id}.
+Questions about a payment? Contact ${contact(ctx.business)} with reference ${booking.id}.
 `,
   };
 }
@@ -172,6 +183,7 @@ export function staffNewBookingEmail(ctx: Ctx, to: string, adminLink: string): M
     to,
     subject: `New booking request ${booking.id}: ${ctx.activity?.name ?? booking.activitySlug}, ${booking.date}`,
     html: layout(
+      ctx.business,
       "New booking request",
       "#1d4ed8",
       `<p>A customer is waiting for approval.</p>${detailsHtml(ctx, extra)}${button(adminLink, "Review in staff inbox")}`,

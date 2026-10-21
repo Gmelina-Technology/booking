@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { getActivity } from "@/lib/activities";
 import { staffNewBookingEmail } from "@/lib/emails";
 import { sendMail } from "@/lib/mailer";
+import { getPublicOwnerById } from "@/lib/owners";
 import { siteUrl } from "@/lib/site-url";
 import { getBookingByToken, holdsSlot, insertBooking, listBookings, readSettings, updateBooking } from "@/lib/store";
 import { bookableDates, facilityNow, isValidDate } from "@/lib/time";
@@ -17,11 +18,11 @@ export type Availability = {
   booked: Record<string, number[]>;
 };
 
-export async function getAvailability(activitySlug: string, date: string): Promise<Availability> {
-  const activity = await getActivity(activitySlug);
+export async function getAvailability(ownerId: string, activitySlug: string, date: string): Promise<Availability> {
+  const activity = await getActivity(ownerId, activitySlug);
   if (!activity || !isValidDate(date)) throw new Error("Unknown activity or date");
 
-  const bookings = await listBookings({ activitySlug, date });
+  const bookings = await listBookings({ ownerId, activitySlug, date });
   const booked: Record<string, number[]> = {};
   for (const b of bookings) {
     if (!holdsSlot(b)) continue;
@@ -35,6 +36,7 @@ export async function getAvailability(activitySlug: string, date: string): Promi
 export type BookingResult = { ok: true; token: string } | { ok: false; error: string };
 
 export async function createBooking(input: {
+  ownerId: string;
   activitySlug: string;
   resourceId: string;
   date: string;
@@ -46,7 +48,9 @@ export async function createBooking(input: {
   players: number;
   notes: string;
 }): Promise<BookingResult> {
-  const activity = await getActivity(input.activitySlug);
+  const owner = await getPublicOwnerById(input.ownerId);
+  if (!owner) return { ok: false, error: "This business isn't taking bookings." };
+  const activity = await getActivity(owner.id, input.activitySlug);
   if (!activity || !activity.active) return { ok: false, error: "This activity isn't available for booking." };
   if (!activity.resources.some((r) => r.id === input.resourceId)) return { ok: false, error: "Unknown court." };
 
@@ -71,6 +75,7 @@ export async function createBooking(input: {
     return { ok: false, error: `Players must be between 1 and ${activity.maxPlayers}.` };
 
   const booking = await insertBooking({
+    ownerId: owner.id,
     activitySlug: activity.slug,
     resourceId: input.resourceId,
     date: input.date,
@@ -86,12 +91,16 @@ export async function createBooking(input: {
   if (!booking) return { ok: false, error: "Sorry — someone just booked that slot. Please pick another time." };
 
   // Alert staff without making the customer wait for the email.
-  const { staffNotifyEmail } = await readSettings();
+  const { staffNotifyEmail } = await readSettings(owner.id);
   if (staffNotifyEmail) {
     const base = await siteUrl();
     after(async () => {
       const result = await sendMail(
-        staffNewBookingEmail({ booking, activity, link: `${base}/bookings/${booking.accessToken}` }, staffNotifyEmail, `${base}/admin`),
+        staffNewBookingEmail(
+          { booking, activity, business: owner.profile, link: `${base}/bookings/${booking.accessToken}` },
+          staffNotifyEmail,
+          `${base}/admin`,
+        ),
       );
       if (!result.ok) console.error("Staff alert email failed:", result.detail);
     });
@@ -109,7 +118,7 @@ export async function submitPaymentReference(token: string, reference: string): 
   const booking = await getBookingByToken(token);
   if (!booking) return { ok: false, error: "Booking not found." };
   if (booking.status !== "awaiting_payment") return { ok: false, error: "This booking isn't waiting for a payment." };
-  await updateBooking(booking.id, (b) => {
+  await updateBooking(booking.ownerId, booking.id, (b) => {
     b.paymentRef = ref;
     b.paymentSubmittedAt = new Date().toISOString();
   });

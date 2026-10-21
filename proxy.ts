@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
-// First line of defence: send anyone without a valid staff session from the
+// First line of defence: send anyone without a valid owner session from the
 // staff pages to the login page. Server actions and admin data loaders check
 // again (lib/auth.ts), because a proxy alone isn't a complete auth layer.
 export async function proxy(request: NextRequest) {

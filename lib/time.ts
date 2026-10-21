@@ -1,9 +1,9 @@
-import { facility } from "./facility";
+import { platform } from "./facility";
 
 /** Current date ("YYYY-MM-DD") and hour in the facility's time zone. */
 export function facilityNow(now: Date = new Date()): { date: string; hour: number } {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: facility.timeZone,
+    timeZone: platform.timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -22,11 +22,11 @@ export function addDays(date: string, days: number): string {
 
 /** The dates customers can currently book, starting today. */
 export function bookableDates(today: string): string[] {
-  return Array.from({ length: facility.bookingWindowDays }, (_, i) => addDays(today, i));
+  return Array.from({ length: platform.bookingWindowDays }, (_, i) => addDays(today, i));
 }
 
 export function formatDate(date: string, opts: Intl.DateTimeFormatOptions = {}): string {
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString(facility.locale, {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString(platform.locale, {
     timeZone: "UTC",
     weekday: "short",
     month: "short",

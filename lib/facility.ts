@@ -1,5 +1,6 @@
-// Facility configuration. Edit this file to rebrand the site. Activities are
-// managed by staff at /admin/activities; `defaultActivities` only seeds them.
+// Platform and facility configuration. `platform` is shared by every business
+// on the site; each business edits its own profile at /admin/business and its
+// activities at /admin/activities (`defaultActivities` only seeds them).
 
 export type Resource = { id: string; name: string };
 
@@ -24,18 +25,30 @@ export type Activity = {
   includes: string[];
 };
 
-export const facility = {
-  name: "Courtside Hub",
-  tagline: "Courts, tables and lanes — book in under a minute.",
-  address: "123 Rizal Avenue, Makati City",
-  phone: "+63 917 000 0000",
-  email: "hello@courtsidehub.ph",
+/** The booking platform itself. Edit this to rebrand the site. */
+export const platform = {
+  name: "Courtside",
+  tagline: "Online court booking for sports facilities.",
   timeZone: "Asia/Manila",
   currency: "PHP",
   locale: "en-PH",
   /** How many days ahead customers can book. */
   bookingWindowDays: 14,
 };
+
+/** What a business shows on its page, in emails and in the footer. Edited at /admin/business. */
+export type BusinessProfile = {
+  name: string;
+  tagline: string;
+  address: string;
+  phone: string;
+  /** Public contact email (may differ from the sign-in email). */
+  email: string;
+};
+
+export function defaultProfile(name: string, email: string): BusinessProfile {
+  return { name, tagline: "Courts and tables, book in under a minute.", address: "", phone: "", email };
+}
 
 function numbered(prefix: string, label: string, count: number): Resource[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -163,47 +176,9 @@ export type PastEvent = {
   /** File name in the uploads store, served at /uploads/<photo>. */
   photo: string | null;
   published: boolean;
-  /** Set on the built-in placeholder events; cleared once staff save the event. */
+  /** Set on placeholder events from older installs; cleared once staff save the event. */
   sample?: boolean;
 };
-
-// Placeholder examples so the section isn't empty on a fresh install.
-// Replace them with the client's real events (or delete them) before launch.
-export const defaultEvents: PastEvent[] = [
-  {
-    id: "sample-1",
-    title: "Pickleball Open Doubles",
-    date: "2026-09-20",
-    activitySlug: "pickleball",
-    summary: "A full day of doubles across all four courts, from first-timers to club regulars.",
-    participants: 48,
-    photo: null,
-    published: true,
-    sample: true,
-  },
-  {
-    id: "sample-2",
-    title: "Junior Badminton Clinic",
-    date: "2026-08-15",
-    activitySlug: "badminton",
-    summary: "Weekend coaching for ages 8–15, covering footwork, grips and match play.",
-    participants: 24,
-    photo: null,
-    published: true,
-    sample: true,
-  },
-  {
-    id: "sample-3",
-    title: "Corporate Sports Day",
-    date: "2026-07-26",
-    activitySlug: "basketball",
-    summary: "Full facility booking for a team-building day: 3x3 basketball, table tennis and pickleball.",
-    participants: 120,
-    photo: null,
-    published: true,
-    sample: true,
-  },
-];
 
 /** A photo in the home page banner collage. */
 export type BannerMoment = { src: string; caption: string; detail: string };
@@ -253,9 +228,9 @@ export function downpaymentFor(total: number, percent: number) {
 }
 
 export function formatMoney(amount: number): string {
-  return new Intl.NumberFormat(facility.locale, {
+  return new Intl.NumberFormat(platform.locale, {
     style: "currency",
-    currency: facility.currency,
+    currency: platform.currency,
     maximumFractionDigits: 0,
   }).format(amount);
 }
