@@ -3,35 +3,51 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
-import { formatHourRange, formatMoney, type Activity } from "@/lib/facility";
+import { formatHourRange, formatMoney, platform, type Activity } from "@/lib/facility";
 import { holdsSlot, listBookings, readSettings, type Booking } from "@/lib/store";
-import { facilityNow, formatDate, isValidDate } from "@/lib/time";
-import { BookingActions, Filters } from "./controls";
+import { addDays, addMonths, endOfMonth, facilityNow, formatDate, isoWeek, startOfMonth, startOfWeek } from "@/lib/time";
+import { DayStrip, DayTimeline, Legend, MonthGrid, WeekGrid, hourRange, type Column } from "./calendar";
+import { BookingActions, DayPicker, ModeSelect, Toolbar } from "./controls";
+import { CreateBooking } from "./create-booking";
+import { adminHref, parseQuery, type AdminQuery, type ViewKey } from "./query";
 
 export const metadata = { title: "Staff — bookings" };
 
 export default function AdminPage({ searchParams }: PageProps<"/admin">) {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10">
-      <h1 className="text-3xl font-bold tracking-tight">Bookings</h1>
-      <p className="mt-1 text-black/60">Review new requests and payments, or see the schedule for any day.</p>
-      <Suspense fallback={<div className="mt-8 h-64 animate-pulse rounded-2xl bg-black/5" />}>
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:py-10">
+      <Suspense
+        fallback={
+          <>
+            <Title />
+            <div className="mt-8 h-96 animate-pulse rounded-2xl bg-black/5" />
+          </>
+        }
+      >
         <BookingsView searchParams={searchParams} />
       </Suspense>
     </div>
   );
 }
 
-/** Quick filter tabs above the table. Status tabs list upcoming bookings across all dates. */
-const VIEWS = [
+function Title() {
+  return (
+    <div>
+      <h1 className="text-3xl font-bold tracking-tight">Bookings</h1>
+      <p className="mt-1 text-black/60">View, manage, and create bookings.</p>
+    </div>
+  );
+}
+
+/** Quick filter tabs of the table view. Status tabs list upcoming bookings across all dates. */
+const VIEWS: { key: ViewKey; label: string; match: ((b: Booking) => boolean) | null; alert: boolean }[] = [
   { key: "schedule", label: "Schedule", match: null, alert: false },
-  { key: "requests", label: "New requests", match: (b: Booking) => b.status === "pending", alert: true },
-  { key: "verify", label: "To verify", match: (b: Booking) => b.status === "awaiting_payment" && !!b.paymentRef, alert: true },
-  { key: "unpaid", label: "Awaiting payment", match: (b: Booking) => b.status === "awaiting_payment" && !b.paymentRef, alert: false },
-  { key: "confirmed", label: "Confirmed", match: (b: Booking) => b.status === "confirmed", alert: false },
-  { key: "cancelled", label: "Cancelled", match: (b: Booking) => b.status === "cancelled", alert: false },
-] as const;
-export type ViewKey = (typeof VIEWS)[number]["key"];
+  { key: "requests", label: "New requests", match: (b) => b.status === "pending", alert: true },
+  { key: "verify", label: "To verify", match: (b) => b.status === "awaiting_payment" && !!b.paymentRef, alert: true },
+  { key: "unpaid", label: "Awaiting payment", match: (b) => b.status === "awaiting_payment" && !b.paymentRef, alert: false },
+  { key: "confirmed", label: "Confirmed", match: (b) => b.status === "confirmed", alert: false },
+  { key: "cancelled", label: "Cancelled", match: (b) => b.status === "cancelled", alert: false },
+];
 
 const viewHints: Partial<Record<ViewKey, string>> = {
   requests: "Approve to email the customer the payment QR, or decline.",
@@ -43,58 +59,225 @@ async function BookingsView({ searchParams }: { searchParams: Promise<Record<str
   const sp = await searchParams;
   await connection();
   const owner = await requireOwner();
-  const today = facilityNow().date;
-  const date = typeof sp.date === "string" && isValidDate(sp.date) ? sp.date : today;
-  const view = VIEWS.find((v) => v.key === sp.view) ?? VIEWS[0];
+  const now = facilityNow();
+  const today = now.date;
   const [activities, all, settings] = await Promise.all([getAllActivities(owner.id), listBookings({ ownerId: owner.id }), readSettings(owner.id)]);
   const activityBySlug = new Map(activities.map((a) => [a.slug, a]));
-  const activitySlug = typeof sp.activity === "string" && activityBySlug.has(sp.activity) ? sp.activity : undefined;
+  const q = parseQuery(sp, today, (slug) => activityBySlug.has(slug));
+  const inActivity = all.filter((b) => !q.activity || b.activitySlug === q.activity);
+  const selected = q.booking ? all.find((b) => b.id === q.booking) : undefined;
+  const overdue = overdueIds(all.filter((b) => b.status === "awaiting_payment" && b.date >= today), settings.paymentWindowHours);
 
-  const inActivity = all.filter((b) => !activitySlug || b.activitySlug === activitySlug);
-  const upcoming = inActivity.filter((b) => b.date >= today);
-  const overdue = overdueIds(upcoming.filter((b) => b.status === "awaiting_payment"), settings.paymentWindowHours);
-
-  const isSchedule = view.match === null;
-  const rows = view.match
-    ? upcoming.filter(view.match).sort((a, b) => a.date.localeCompare(b.date) || a.startHour - b.startHour)
-    : inActivity.filter((b) => b.date === date).sort((a, b) => a.startHour - b.startHour);
-  const active = rows.filter(holdsSlot);
-  const confirmed = rows.filter((b) => b.status === "confirmed");
-
-  /** Tab links keep the activity filter (and the day, for Schedule). */
-  function href(key: ViewKey) {
-    const params = new URLSearchParams();
-    if (key !== "schedule") params.set("view", key);
-    else if (date !== today) params.set("date", date);
-    if (activitySlug) params.set("activity", activitySlug);
-    const q = params.toString();
-    return q ? `/admin?${q}` : "/admin";
-  }
-
-  function rowProps(b: Booking): RowProps {
+  function rowProps(b: Booking, showDate: boolean): RowProps {
     return {
       b,
       activity: activityBySlug.get(b.activitySlug),
-      showDate: !isSchedule,
+      showDate,
       overdueHours: overdue.has(b.id) ? settings.paymentWindowHours : null,
     };
   }
 
   return (
     <>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <Title />
+        <CreateBooking
+          q={q}
+          today={today}
+          activities={activities.map((a) => ({
+            slug: a.slug,
+            name: a.name,
+            resourceLabel: a.resourceLabel,
+            resources: a.resources,
+            openHour: a.openHour,
+            closeHour: a.closeHour,
+            maxHoursPerBooking: a.maxHoursPerBooking,
+            maxPlayers: a.maxPlayers,
+            pricePerHour: a.pricePerHour,
+          }))}
+        />
+      </div>
+      <Toolbar q={q} today={today} activities={activities.map((a) => ({ slug: a.slug, name: a.name }))} />
+
+      {q.mode === "table" ? (
+        <TableView q={q} today={today} bookings={inActivity} rowProps={rowProps} />
+      ) : (
+        <CalendarView q={q} today={today} nowHour={now.hour} bookings={inActivity} activities={activities} />
+      )}
+
+      {selected && <BookingPanel closeHref={adminHref(q, today, { booking: "" })} {...rowProps(selected, true)} />}
+    </>
+  );
+}
+
+function CalendarView({
+  q,
+  today,
+  nowHour,
+  bookings,
+  activities,
+}: {
+  q: AdminQuery;
+  today: string;
+  nowHour: number;
+  bookings: Booking[];
+  activities: Activity[];
+}) {
+  const visible = bookings.filter((b) => (q.cancelled || holdsSlot(b)) && (q.past || b.date >= today));
+  const href = (changes: Partial<AdminQuery>) => adminHref(q, today, changes);
+  const bookingHref = (id: string) => href({ booking: id });
+  const dayHref = (date: string) => href({ mode: "day", date });
+  const activityName = new Map(activities.map((a) => [a.slug, a]));
+  const courtName = (b: Booking) => {
+    const a = activityName.get(b.activitySlug);
+    return `${a?.name ?? b.activitySlug} · ${a?.resources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId}`;
+  };
+
+  // Courts for the day timeline: the chosen space, or every space that's open or has a booking that day.
+  const onDay = visible.filter((b) => b.date === q.date);
+  const shown = activities.filter((a) => (q.activity ? a.slug === q.activity : a.active || onDay.some((b) => b.activitySlug === a.slug)));
+  const columns: Column[] = shown.flatMap((a) => a.resources.map((r) => ({ activity: a, resourceId: r.id, name: r.name })));
+  const dayRange = hourRange(shown, onDay);
+  const weekStart = startOfWeek(q.date);
+  const weekRange = hourRange(
+    q.activity ? shown : activities.filter((a) => a.active),
+    visible.filter((b) => b.date >= weekStart && b.date <= addDays(weekStart, 6)),
+  );
+
+  const unit = q.mode === "month" ? "Month" : q.mode === "week" ? "Week" : "Day";
+  const step = (n: number) => (q.mode === "month" ? addMonths(q.date, n) : addDays(q.date, q.mode === "week" ? 7 * n : n));
+  const rangeLabel =
+    q.mode === "month"
+      ? `${formatDate(startOfMonth(q.date), { weekday: undefined, year: "numeric" })} – ${formatDate(endOfMonth(q.date), { weekday: undefined, year: "numeric" })}`
+      : q.mode === "week"
+        ? `${formatDate(weekStart, { weekday: undefined, year: "numeric" })} – ${formatDate(addDays(weekStart, 6), { weekday: undefined, year: "numeric" })}`
+        : formatDate(q.date, { weekday: "long", month: "long", year: "numeric" });
+  const counts = new Map<string, number>();
+  for (const b of visible) counts.set(b.date, (counts.get(b.date) ?? 0) + 1);
+  const navBtn = "px-3 py-2 text-sm font-medium hover:bg-black/[0.03]";
+
+  return (
+    <div className="mt-4 rounded-2xl border border-black/5 bg-white shadow-sm">
+      {/* Desktop header: today badge, period title, navigation and view selector. */}
+      <div className="hidden flex-wrap items-center gap-4 border-b border-black/5 p-4 md:flex">
+        <Link
+          href={href({ date: today })}
+          scroll={false}
+          className="flex w-12 flex-col items-center overflow-hidden rounded-xl border border-black/10 text-center"
+          title="Go to today"
+        >
+          <span className="w-full bg-black/[0.03] py-0.5 text-[10px] font-semibold uppercase text-black/50">
+            {formatDate(today, { weekday: undefined, day: undefined, month: "short" })}
+          </span>
+          <span className="py-0.5 text-lg font-bold text-emerald-700">{Number(today.slice(8))}</span>
+        </Link>
+        <div>
+          <p className="flex items-center gap-2 text-lg font-bold">
+            {formatDate(q.date, { weekday: undefined, day: undefined, month: "long", year: "numeric" })}
+            <span className="rounded-md bg-black/5 px-1.5 py-0.5 text-xs font-medium text-black/60">Week {isoWeek(q.date)}</span>
+          </p>
+          <p className="text-xs text-black/50">{rangeLabel}</p>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <nav className="flex divide-x divide-black/10 overflow-hidden rounded-lg border border-black/10" aria-label={`Change ${unit.toLowerCase()}`}>
+            <Link href={href({ date: step(-1) })} scroll={false} className={navBtn}>
+              ‹ Prev {unit}
+            </Link>
+            <Link href={href({ date: today })} scroll={false} className={`${navBtn} text-black/50`}>
+              This {unit}
+            </Link>
+            <Link href={href({ date: step(1) })} scroll={false} className={navBtn}>
+              Next {unit} ›
+            </Link>
+          </nav>
+          <ModeSelect q={q} today={today} />
+        </div>
+      </div>
+
+      <div className="hidden md:block">
+        {q.mode === "month" && <MonthGrid bookings={visible} today={today} date={q.date} bookingHref={bookingHref} dayHref={dayHref} />}
+        {q.mode === "week" && (
+          <WeekGrid
+            bookings={visible}
+            today={today}
+            date={q.date}
+            bookingHref={bookingHref}
+            dayHref={dayHref}
+            range={weekRange}
+            nowHour={nowHour}
+            courtName={courtName}
+          />
+        )}
+        {q.mode === "day" && (
+          <DayTimeline bookings={visible} today={today} date={q.date} bookingHref={bookingHref} range={dayRange} nowHour={nowHour} columns={columns} />
+        )}
+      </div>
+
+      {/* Phones: a day strip, space chips and the day's timeline, one column per court. */}
+      <div className="md:hidden">
+        <div className="space-y-3 border-b border-black/5 p-3">
+          <DayStrip date={q.date} today={today} dayHref={(date) => href({ date })} counts={counts} />
+          <div className="-mx-3 flex gap-2 overflow-x-auto px-3">
+            {[{ slug: "", name: "All spaces" }, ...activities].map((a) => (
+              <Link
+                key={a.slug}
+                href={href({ activity: a.slug })}
+                scroll={false}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium ${
+                  q.activity === a.slug ? "bg-emerald-700 text-white" : "bg-black/5 text-black/60"
+                }`}
+              >
+                {a.name}
+              </Link>
+            ))}
+          </div>
+        </div>
+        <DayTimeline bookings={visible} today={today} date={q.date} bookingHref={bookingHref} range={dayRange} nowHour={nowHour} columns={columns} />
+      </div>
+
+      <div className="border-t border-black/5 px-4 py-3">
+        <Legend showCancelled={q.cancelled} />
+      </div>
+    </div>
+  );
+}
+
+function TableView({
+  q,
+  today,
+  bookings,
+  rowProps,
+}: {
+  q: AdminQuery;
+  today: string;
+  bookings: Booking[];
+  rowProps: (b: Booking, showDate: boolean) => RowProps;
+}) {
+  const view = VIEWS.find((v) => v.key === q.view) ?? VIEWS[0];
+  const listed = q.past ? bookings : bookings.filter((b) => b.date >= today);
+  const isSchedule = view.match === null;
+  const rows = view.match
+    ? listed.filter(view.match).sort((a, b) => a.date.localeCompare(b.date) || a.startHour - b.startHour)
+    : bookings.filter((b) => b.date === q.date).sort((a, b) => a.startHour - b.startHour);
+  const active = rows.filter(holdsSlot);
+  const confirmed = rows.filter((b) => b.status === "confirmed");
+
+  return (
+    <>
       {/* The baseline is an inset shadow so the active tab's border can cover it without
           overflowing the scroll container (which would add a vertical scrollbar). */}
       <nav
-        className="mt-8 flex gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_rgb(0_0_0/0.1)]"
+        className="mt-4 flex gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_rgb(0_0_0/0.1)]"
         aria-label="Filter bookings"
       >
         {VIEWS.map((v) => {
           const selected = v.key === view.key;
-          const count = v.match ? upcoming.filter(v.match).length : null;
+          const count = v.match ? listed.filter(v.match).length : null;
           return (
             <Link
               key={v.key}
-              href={href(v.key)}
+              href={adminHref(q, today, { view: v.key })}
+              scroll={false}
               aria-current={selected ? "page" : undefined}
               className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium ${
                 selected ? "border-emerald-700 text-emerald-800" : "border-transparent text-black/60 hover:text-black"
@@ -119,13 +302,11 @@ async function BookingsView({ searchParams }: { searchParams: Promise<Record<str
         })}
       </nav>
 
-      <Filters
-        view={isSchedule ? null : view.key}
-        date={date}
-        today={today}
-        activity={activitySlug ?? ""}
-        activities={activities.map((a) => ({ slug: a.slug, name: a.name }))}
-      />
+      {isSchedule ? (
+        <DayPicker q={q} today={today} />
+      ) : (
+        <p className="mt-4 text-sm text-black/50">{q.past ? "All bookings, including past dates" : "Upcoming bookings, all dates"}</p>
+      )}
       {viewHints[view.key] && <p className="mt-3 text-sm text-black/50">{viewHints[view.key]}</p>}
 
       {isSchedule && (
@@ -139,7 +320,7 @@ async function BookingsView({ searchParams }: { searchParams: Promise<Record<str
       <div className="mt-6 rounded-2xl border border-black/5 bg-white shadow-sm">
         {rows.length === 0 ? (
           <p className="p-10 text-center text-black/50">
-            {isSchedule ? `No bookings for ${formatDate(date, { month: "long" })}.` : "No upcoming bookings here."}
+            {isSchedule ? `No bookings for ${formatDate(q.date, { month: "long" })}.` : q.past ? "No bookings here." : "No upcoming bookings here."}
           </p>
         ) : (
           <>
@@ -147,7 +328,7 @@ async function BookingsView({ searchParams }: { searchParams: Promise<Record<str
             <ul className="divide-y divide-black/5 lg:hidden">
               {rows.map((b) => (
                 <li key={b.id}>
-                  <BookingCard {...rowProps(b)} />
+                  <BookingCard {...rowProps(b, !isSchedule)} />
                 </li>
               ))}
             </ul>
@@ -167,7 +348,7 @@ async function BookingsView({ searchParams }: { searchParams: Promise<Record<str
               </thead>
               <tbody className="divide-y divide-black/5">
                 {rows.map((b) => (
-                  <BookingRow key={b.id} {...rowProps(b)} />
+                  <BookingRow key={b.id} {...rowProps(b, !isSchedule)} />
                 ))}
               </tbody>
             </table>
@@ -175,6 +356,40 @@ async function BookingsView({ searchParams }: { searchParams: Promise<Record<str
         )}
       </div>
     </>
+  );
+}
+
+/** Side panel with one booking's details and actions, opened from the calendar (?booking=<id>). */
+function BookingPanel({ closeHref, ...props }: RowProps & { closeHref: string }) {
+  const { b } = props;
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="booking-panel-title">
+      <Link href={closeHref} scroll={false} className="absolute inset-0 bg-black/30" aria-label="Close booking details" />
+      <aside className="relative flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-xl">
+        <div className="flex items-start justify-between gap-3 border-b border-black/5 p-4">
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-black/40">Booking {b.id}</p>
+            <h2 id="booking-panel-title" className="truncate text-lg font-bold">
+              {b.name}
+            </h2>
+          </div>
+          <Link href={closeHref} scroll={false} className="rounded-lg px-2 py-1 text-black/40 hover:bg-black/5 hover:text-black" aria-label="Close">
+            ✕
+          </Link>
+        </div>
+        <BookingCard {...props} />
+        <dl className="mx-4 mb-4 grid grid-cols-2 gap-x-4 gap-y-1 rounded-xl bg-black/[0.02] p-3 text-xs text-black/60">
+          <dt>Requested</dt>
+          <dd className="text-right">{new Date(b.createdAt).toLocaleString(platform.locale, { timeZone: platform.timeZone, dateStyle: "medium", timeStyle: "short" })}</dd>
+          {b.cancelReason && (
+            <>
+              <dt>Cancel reason</dt>
+              <dd className="text-right">{b.cancelReason}</dd>
+            </>
+          )}
+        </dl>
+      </aside>
+    </div>
   );
 }
 
@@ -261,14 +476,19 @@ function Customer({ b }: { b: Booking }) {
       <p className="truncate font-medium" title={`${b.name} · ${b.players} players`}>
         {b.name} <span className="font-normal text-black/50">· {b.players} players</span>
       </p>
-      <p className="truncate text-xs text-black/50" title={`${b.phone} · ${b.email}`}>
-        <a href={`tel:${b.phone}`} className="hover:text-emerald-700 hover:underline">
-          {b.phone}
-        </a>{" "}
-        ·{" "}
-        <a href={`mailto:${b.email}`} className="hover:text-emerald-700 hover:underline">
-          {b.email}
-        </a>
+      {/* Staff-created bookings may have no phone or email. */}
+      <p className="truncate text-xs text-black/50" title={[b.phone, b.email].filter(Boolean).join(" · ")}>
+        {b.phone && (
+          <a href={`tel:${b.phone}`} className="hover:text-emerald-700 hover:underline">
+            {b.phone}
+          </a>
+        )}
+        {b.phone && b.email && " · "}
+        {b.email && (
+          <a href={`mailto:${b.email}`} className="hover:text-emerald-700 hover:underline">
+            {b.email}
+          </a>
+        )}
       </p>
       {b.notes && (
         // One line until clicked; the full note is also the tooltip.
@@ -338,9 +558,10 @@ function Payment({ b, overdueHours }: { b: Booking; overdueHours: number | null 
   );
 }
 
+// Same hues as the calendar pills (statusTone in ./calendar).
 const statusStyles: Record<Booking["status"], [string, string]> = {
-  pending: ["New request", "bg-blue-100 text-blue-800"],
-  awaiting_payment: ["Awaiting payment", "bg-amber-100 text-amber-800"],
+  pending: ["New request", "bg-orange-100 text-orange-800"],
+  awaiting_payment: ["Awaiting payment", "bg-pink-100 text-pink-800"],
   confirmed: ["Confirmed", "bg-emerald-100 text-emerald-800"],
   cancelled: ["Cancelled", "bg-black/5 text-black/50"],
 };
