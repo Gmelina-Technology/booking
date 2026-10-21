@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import type { Booking, DocKey, LoginFailure, StoreBackend } from "./store-types";
+import type { Booking, DocKind, InsertOwnerResult, LoginFailure, Owner, StoreBackend } from "./store-types";
 
 // Postgres storage for production (e.g. Neon via the Vercel Marketplace).
 // Enabled when DATABASE_URL (or POSTGRES_URL) is set.
@@ -7,12 +7,27 @@ import type { Booking, DocKey, LoginFailure, StoreBackend } from "./store-types"
 // Each booking is a row: a few columns for querying and for the overlap
 // constraint, plus the full object in `data`. The exclusion constraint makes
 // double-booking impossible even with concurrent requests on many instances.
+// Owners are stored the same way. An owner's documents use the key
+// "owners/<id>/<kind>"; a bare "<kind>" key is data from before accounts
+// existed, which the first account adopts.
+//
+// The schema is safe to re-run, and upgrades a database created before
+// accounts existed (adds owner_id and scopes the overlap rule to each owner).
 
 export const SCHEMA = `
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
+CREATE TABLE IF NOT EXISTS owners (
+  id         text PRIMARY KEY,
+  handle     text NOT NULL UNIQUE,
+  email      text NOT NULL UNIQUE,
+  created_at text NOT NULL,
+  data       jsonb NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS bookings (
   id            text PRIMARY KEY,
+  owner_id      text,
   access_token  text UNIQUE,
   activity_slug text NOT NULL,
   resource_id   text NOT NULL,
@@ -21,15 +36,23 @@ CREATE TABLE IF NOT EXISTS bookings (
   hours         int  NOT NULL CHECK (hours > 0),
   status        text NOT NULL,
   created_at    text NOT NULL,
-  data          jsonb NOT NULL,
-  CONSTRAINT bookings_no_overlap EXCLUDE USING gist (
-    activity_slug WITH =,
-    resource_id   WITH =,
-    date          WITH =,
-    int4range(start_hour, start_hour + hours) WITH &&
-  ) WHERE (status <> 'cancelled')
+  data          jsonb NOT NULL
 );
-CREATE INDEX IF NOT EXISTS bookings_date_idx ON bookings (date, start_hour);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS owner_id text;
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_no_overlap;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'bookings_owner_no_overlap') THEN
+    ALTER TABLE bookings ADD CONSTRAINT bookings_owner_no_overlap EXCLUDE USING gist (
+      owner_id      WITH =,
+      activity_slug WITH =,
+      resource_id   WITH =,
+      date          WITH =,
+      int4range(start_hour, start_hour + hours) WITH &&
+    ) WHERE (status <> 'cancelled');
+  END IF;
+END $$;
+DROP INDEX IF EXISTS bookings_date_idx;
+CREATE INDEX IF NOT EXISTS bookings_owner_date_idx ON bookings (owner_id, date, start_hour);
 
 CREATE TABLE IF NOT EXISTS documents (
   key   text PRIMARY KEY,
@@ -81,11 +104,15 @@ async function db() {
   return sql();
 }
 
+const docKey = (ownerId: string, kind: DocKind) => `owners/${ownerId}/${kind}`;
+
 type Row = { data: Booking };
+type OwnerRow = { data: Owner };
 
 function columns(b: Booking) {
   return {
     id: b.id,
+    owner_id: b.ownerId,
     access_token: b.accessToken ?? null,
     activity_slug: b.activitySlug,
     resource_id: b.resourceId,
@@ -101,11 +128,67 @@ function columns(b: Booking) {
 const EXCLUSION_VIOLATION = "23P01";
 
 export const postgresStore: StoreBackend = {
-  async listBookings({ activitySlug, date }) {
+  async listOwners() {
+    const q = await db();
+    const rows = await q<OwnerRow[]>`SELECT data FROM owners ORDER BY created_at`;
+    return rows.map((r) => r.data);
+  },
+
+  async findOwner(by, value) {
+    const q = await db();
+    const rows =
+      by === "id"
+        ? await q<OwnerRow[]>`SELECT data FROM owners WHERE id = ${value}`
+        : by === "handle"
+          ? await q<OwnerRow[]>`SELECT data FROM owners WHERE handle = ${value}`
+          : await q<OwnerRow[]>`SELECT data FROM owners WHERE email = ${value}`;
+    return rows[0]?.data;
+  },
+
+  async insertOwner(owner) {
+    const q = await db();
+    return q.begin(async (tx) => {
+      // Serializes sign-ups so only one account can be "the first".
+      await tx`SELECT pg_advisory_xact_lock(718202)`;
+      const [taken] = await tx<{ handle: string }[]>`
+        SELECT handle FROM owners WHERE handle = ${owner.handle} OR email = ${owner.email} LIMIT 1`;
+      if (taken) return taken.handle === owner.handle ? "handle_taken" : "email_taken";
+      const [{ count }] = await tx<{ count: number }[]>`SELECT count(*)::int AS count FROM owners`;
+      await tx`
+        INSERT INTO owners (id, handle, email, created_at, data)
+        VALUES (${owner.id}, ${owner.handle}, ${owner.email}, ${owner.createdAt}, ${tx.json(owner as unknown as postgres.JSONValue)})`;
+      if (count === 0) {
+        await tx`
+          UPDATE bookings SET owner_id = ${owner.id}, data = jsonb_set(data, '{ownerId}', to_jsonb(${owner.id}::text))
+          WHERE owner_id IS NULL`;
+        await tx`
+          UPDATE documents SET key = 'owners/' || ${owner.id}::text || '/' || key
+          WHERE key IN ('activities', 'events', 'settings')`;
+      }
+      return "ok";
+    }) as Promise<InsertOwnerResult>;
+  },
+
+  async updateOwner(id, change) {
+    const q = await db();
+    return q.begin(async (tx) => {
+      const [row] = await tx<OwnerRow[]>`SELECT data FROM owners WHERE id = ${id} FOR UPDATE`;
+      if (!row) return null;
+      const owner = row.data;
+      change(owner);
+      await tx`
+        UPDATE owners SET email = ${owner.email}, data = ${tx.json(owner as unknown as postgres.JSONValue)}
+        WHERE id = ${id}`;
+      return owner;
+    }) as Promise<Owner | null>;
+  },
+
+  async listBookings({ ownerId, activitySlug, date }) {
     const q = await db();
     const rows = await q<Row[]>`
       SELECT data FROM bookings
-      WHERE (${activitySlug ?? null}::text IS NULL OR activity_slug = ${activitySlug ?? null})
+      WHERE owner_id = ${ownerId}
+        AND (${activitySlug ?? null}::text IS NULL OR activity_slug = ${activitySlug ?? null})
         AND (${date ?? null}::text IS NULL OR date = ${date ?? null})
       ORDER BY date, start_hour`;
     return rows.map((r) => r.data);
@@ -125,8 +208,8 @@ export const postgresStore: StoreBackend = {
     const c = columns(booking);
     try {
       await q`
-        INSERT INTO bookings (id, access_token, activity_slug, resource_id, date, start_hour, hours, status, created_at, data)
-        VALUES (${c.id}, ${c.access_token}, ${c.activity_slug}, ${c.resource_id}, ${c.date}, ${c.start_hour},
+        INSERT INTO bookings (id, owner_id, access_token, activity_slug, resource_id, date, start_hour, hours, status, created_at, data)
+        VALUES (${c.id}, ${c.owner_id}, ${c.access_token}, ${c.activity_slug}, ${c.resource_id}, ${c.date}, ${c.start_hour},
                 ${c.hours}, ${c.status}, ${c.created_at}, ${q.json(c.data)})`;
       return true;
     } catch (err) {
@@ -153,14 +236,15 @@ export const postgresStore: StoreBackend = {
     }) as Promise<Booking | null>;
   },
 
-  async readDoc<T>(key: DocKey, fallback: T): Promise<T> {
+  async readDoc<T>(ownerId: string, kind: DocKind, fallback: T): Promise<T> {
     const q = await db();
-    const [row] = await q<{ value: T }[]>`SELECT value FROM documents WHERE key = ${key}`;
+    const [row] = await q<{ value: T }[]>`SELECT value FROM documents WHERE key = ${docKey(ownerId, kind)}`;
     return row ? row.value : fallback;
   },
 
-  async updateDoc<T, R>(key: DocKey, fallback: T, change: (doc: T) => { doc: T; result: R }): Promise<R> {
+  async updateDoc<T, R>(ownerId: string, kind: DocKind, fallback: T, change: (doc: T) => { doc: T; result: R }): Promise<R> {
     const q = await db();
+    const key = docKey(ownerId, kind);
     return q.begin(async (tx) => {
       await tx`INSERT INTO documents (key, value) VALUES (${key}, ${tx.json(fallback as postgres.JSONValue)}) ON CONFLICT (key) DO NOTHING`;
       const [row] = await tx<{ value: T }[]>`SELECT value FROM documents WHERE key = ${key} FOR UPDATE`;
@@ -193,3 +277,4 @@ export const postgresStore: StoreBackend = {
     await q`DELETE FROM login_failures WHERE ip = ${ip}`;
   },
 };
+

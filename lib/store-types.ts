@@ -1,6 +1,8 @@
 // Types shared by the storage backends (lib/store-file.ts, lib/store-postgres.ts)
 // and the public store API (lib/store.ts).
 
+import type { BusinessProfile } from "./facility";
+
 /**
  * Booking lifecycle:
  *   pending          customer requested it; the slot is held while staff review
@@ -16,6 +18,8 @@ export type EmailLogEntry = { kind: EmailKind; at: string; ok: boolean; detail: 
 export type Booking = {
   /** Short reference customers quote at the front desk. Not a secret. */
   id: string;
+  /** The business the booking belongs to. */
+  ownerId: string;
   /**
    * Unguessable token in the confirmation link (/bookings/<token>). Missing on
    * bookings made before links were added; those are only visible to staff.
@@ -46,15 +50,40 @@ export type Booking = {
   emails?: EmailLogEntry[];
 };
 
-export type BookingFilter = { activitySlug?: string; date?: string };
+/** A business owner's account. Each one has a public page at /p/@<handle>. */
+export type Owner = {
+  id: string;
+  /** Lowercase, unique, permanent: it's in the page URL. */
+  handle: string;
+  /** Sign-in email, lowercase and unique. */
+  email: string;
+  passwordHash: string;
+  createdAt: string;
+  profile: BusinessProfile;
+};
 
-/** Keys of the small JSON documents stored alongside bookings. */
-export type DocKey = "activities" | "events" | "settings";
+export type BookingFilter = { ownerId: string; activitySlug?: string; date?: string };
+
+/** The small JSON documents each owner has alongside their bookings. */
+export type DocKind = "activities" | "events" | "settings";
 
 export type LoginFailure = { count: number; untilMs: number };
 
+export type InsertOwnerResult = "ok" | "handle_taken" | "email_taken";
+
 /** What each storage backend implements. lib/store.ts builds the app-facing API on top. */
 export interface StoreBackend {
+  listOwners(): Promise<Owner[]>;
+  findOwner(by: "id" | "handle" | "email", value: string): Promise<Owner | undefined>;
+  /**
+   * Creates the account unless the handle or email is taken. The very first
+   * account also adopts any data from before accounts existed (bookings and
+   * documents with no owner), so an existing single-business install carries over.
+   */
+  insertOwner(owner: Owner): Promise<InsertOwnerResult>;
+  /** Atomically applies `change`; if `change` throws, nothing is written. */
+  updateOwner(id: string, change: (o: Owner) => void): Promise<Owner | null>;
+
   listBookings(filter: BookingFilter): Promise<Booking[]>;
   findBooking(by: "id" | "accessToken", value: string): Promise<Booking | undefined>;
   /** Inserts the booking, or returns false if it overlaps an active booking on the same court. */
@@ -62,9 +91,9 @@ export interface StoreBackend {
   /** Atomically applies `change`; if `change` throws, nothing is written and the error propagates. */
   updateBooking(id: string, change: (b: Booking) => void): Promise<Booking | null>;
 
-  readDoc<T>(key: DocKey, fallback: T): Promise<T>;
+  readDoc<T>(ownerId: string, kind: DocKind, fallback: T): Promise<T>;
   /** Atomic read-modify-write of a document. */
-  updateDoc<T, R>(key: DocKey, fallback: T, change: (doc: T) => { doc: T; result: R }): Promise<R>;
+  updateDoc<T, R>(ownerId: string, kind: DocKind, fallback: T, change: (doc: T) => { doc: T; result: R }): Promise<R>;
 
   getLoginFailure(ip: string): Promise<LoginFailure | null>;
   /** Counts a failed login and returns the new state. The count resets once the lock expires. */

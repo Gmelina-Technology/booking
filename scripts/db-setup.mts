@@ -37,14 +37,27 @@ try {
   console.log("Schema is ready.");
 
   if (process.argv.includes("--import")) {
+    // Accounts first, so their documents and bookings have somewhere to go.
+    const owners: Record<string, unknown>[] = (await readJson("owners.json")) ?? [];
+    let ownersAdded = 0;
+    for (const o of owners) {
+      const result = await sql`
+        INSERT INTO owners (id, handle, email, created_at, data)
+        VALUES (${o.id as string}, ${o.handle as string}, ${o.email as string}, ${o.createdAt as string}, ${sql.json(o as postgres.JSONValue)})
+        ON CONFLICT DO NOTHING`;
+      if (result.count) ownersAdded++;
+    }
+    console.log(`Accounts: ${ownersAdded} imported, ${owners.length - ownersAdded} already there (same id, handle or email).`);
+
     const bookings: Record<string, unknown>[] = (await readJson("bookings.json")) ?? [];
     let added = 0;
     let skipped = 0;
     for (const b of bookings) {
       try {
+        // Bookings without an owner are from before accounts existed; the first account to sign up adopts them.
         const result = await sql`
-          INSERT INTO bookings (id, access_token, activity_slug, resource_id, date, start_hour, hours, status, created_at, data)
-          VALUES (${b.id as string}, ${(b.accessToken as string) ?? null}, ${b.activitySlug as string}, ${b.resourceId as string},
+          INSERT INTO bookings (id, owner_id, access_token, activity_slug, resource_id, date, start_hour, hours, status, created_at, data)
+          VALUES (${b.id as string}, ${(b.ownerId as string) ?? null}, ${(b.accessToken as string) ?? null}, ${b.activitySlug as string}, ${b.resourceId as string},
                   ${b.date as string}, ${b.startHour as number}, ${b.hours as number}, ${b.status as string},
                   ${b.createdAt as string}, ${sql.json(b as postgres.JSONValue)})
           ON CONFLICT (id) DO NOTHING`;
@@ -58,12 +71,20 @@ try {
     }
     console.log(`Bookings: ${added} imported, ${skipped} skipped.`);
 
-    for (const key of ["activities", "events", "settings"] as const) {
-      const value = await readJson(`${key}.json`);
-      if (value === undefined) {
-        console.log(`${key}: no local file, keeping defaults.`);
-        continue;
-      }
+    // Each account's documents (data/owners/<id>/<kind>.json -> key "owners/<id>/<kind>"), plus
+    // any top-level data/<kind>.json from before accounts existed (key "<kind>", adopted later).
+    const docFiles = [
+      ...(["activities", "events", "settings"] as const).map((kind) => ({ file: `${kind}.json`, key: kind })),
+      ...owners.flatMap((o) =>
+        (["activities", "events", "settings"] as const).map((kind) => ({
+          file: path.join("owners", o.id as string, `${kind}.json`),
+          key: `owners/${o.id}/${kind}`,
+        })),
+      ),
+    ];
+    for (const { file, key } of docFiles) {
+      const value = await readJson(file);
+      if (value === undefined) continue;
       const result = await sql`
         INSERT INTO documents (key, value) VALUES (${key}, ${sql.json(value)}) ON CONFLICT (key) DO NOTHING`;
       console.log(`${key}: ${result.count ? "imported" : "already in the database, left unchanged"}.`);

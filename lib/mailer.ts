@@ -3,7 +3,7 @@ import path from "node:path";
 import nodemailer, { type Transporter } from "nodemailer";
 
 export type MailImage = { cid: string; filename: string; content: Buffer; contentType: string };
-export type Mail = { to: string; subject: string; html: string; text: string; images?: MailImage[] };
+export type Mail = { to: string; replyTo?: string; subject: string; html: string; text: string; images?: MailImage[] };
 export type MailResult = { ok: boolean; detail: string };
 
 const OUTBOX_DIR = path.join(process.cwd(), "data", "outbox");
@@ -38,6 +38,7 @@ export async function sendMail(mail: Mail): Promise<MailResult> {
     await getTransport().sendMail({
       from: process.env.MAIL_FROM || process.env.SMTP_USER,
       to: mail.to,
+      replyTo: mail.replyTo,
       subject: mail.subject,
       html: mail.html,
       text: mail.text,
