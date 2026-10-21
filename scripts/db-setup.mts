@@ -76,7 +76,7 @@ try {
     const docFiles = [
       ...(["activities", "events", "settings"] as const).map((kind) => ({ file: `${kind}.json`, key: kind })),
       ...owners.flatMap((o) =>
-        (["activities", "events", "settings"] as const).map((kind) => ({
+        (["activities", "events", "settings", "hero"] as const).map((kind) => ({
           file: path.join("owners", o.id as string, `${kind}.json`),
           key: `owners/${o.id}/${kind}`,
         })),

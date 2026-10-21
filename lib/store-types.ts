@@ -65,7 +65,7 @@ export type Owner = {
 export type BookingFilter = { ownerId: string; activitySlug?: string; date?: string };
 
 /** The small JSON documents each owner has alongside their bookings. */
-export type DocKind = "activities" | "events" | "settings";
+export type DocKind = "activities" | "events" | "settings" | "hero";
 
 export type LoginFailure = { count: number; untilMs: number };
 

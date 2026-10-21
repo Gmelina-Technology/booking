@@ -6,6 +6,7 @@ import {
   type PastEvent,
   type PaymentSettings,
 } from "./facility";
+import { defaultHeroDoc, type HeroDoc } from "./hero";
 import { fileStore } from "./store-file";
 import { databaseUrl, postgresStore } from "./store-postgres";
 import type { Booking, BookingFilter, InsertOwnerResult, Owner, StoreBackend } from "./store-types";
@@ -182,6 +183,17 @@ export async function readSettings(ownerId: string): Promise<PaymentSettings> {
 
 export function writeSettings(ownerId: string, settings: PaymentSettings): Promise<void> {
   return backend().updateDoc<Partial<PaymentSettings>, void>(ownerId, "settings", {}, () => ({ doc: settings, result: undefined }));
+}
+
+// ---- Page banner ----------------------------------------------------------
+
+export function readHero(ownerId: string): Promise<HeroDoc> {
+  return backend().readDoc(ownerId, "hero", defaultHeroDoc());
+}
+
+/** Atomic read-modify-write of the owner's banner settings and photo library. */
+export function updateHero<R>(ownerId: string, change: (doc: HeroDoc) => R): Promise<R> {
+  return backend().updateDoc(ownerId, "hero", defaultHeroDoc(), (doc) => ({ doc, result: change(doc) }));
 }
 
 // ---- Login rate limiting --------------------------------------------------
