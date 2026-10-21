@@ -86,6 +86,7 @@ Every email sent is logged on the booking. A failed send shows in red in the sta
 | `/admin/settings` | Downpayment %, payment QR, account details, staff alert email, test email |
 | `/admin/activities` | Staff view: add, edit, reorder, hide or delete activities |
 | `/admin/events` | Staff view: past events (with photos) shown on the business page |
+| `/admin/banner` | Staff view: the business page banner's template, text, photos, colours and buttons, with a live preview |
 
 The route folders are `app/(platform)/` (platform header and footer) and `app/p/[handle]/` (the
 business's own header and footer). The `@` in `/p/@handle` is optional when typed, so
@@ -96,6 +97,14 @@ business's own header and footer). The `@` in `/p/@handle` is optional when type
 The platform name, time zone, currency and booking window are in `platform` in
 [`lib/facility.ts`](lib/facility.ts), shared by every business. Each business's name, address and
 contact details are edited by its owner at `/admin/business`.
+
+Staff design their page banner at `/admin/banner`. They pick one of four templates (**Collage**,
+**Spotlight**, **Split**, **Minimal**), where the text sits, the headline, label and description
+(`{name}` in the headline becomes the business name in the highlight colour), background and
+highlight colours, photo tint and crop focus, and the buttons' style, corners, size, wording and
+destination. Banner photos are uploaded into a per-owner library of up to 12. Up to 4 can be picked
+and ordered, and the rest of the banner is filled with event and stock photos. The preview shows the
+desktop and phone layouts. Changes go live only after **Save banner**.
 
 Staff manage activities at `/admin/activities`. For each one they can set the name, icon, card
 colour, description, price per hour, opening hours, maximum booking length, maximum players, the
