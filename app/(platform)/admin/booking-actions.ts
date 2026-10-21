@@ -7,7 +7,8 @@ import { cancelledEmail, confirmedEmail, paymentRequestEmail } from "@/lib/email
 import { downpaymentFor } from "@/lib/facility";
 import { sendMail, type MailImage, type MailResult } from "@/lib/mailer";
 import { siteUrl } from "@/lib/site-url";
-import { readSettings, readUpload, UPLOAD_TYPES, updateBooking, type Booking, type EmailKind, type Owner } from "@/lib/store";
+import { insertBooking, readSettings, readUpload, UPLOAD_TYPES, updateBooking, type Booking, type EmailKind, type Owner } from "@/lib/store";
+import { isValidDate } from "@/lib/time";
 
 // Every action here is staff-only: each one starts with requireOwner(), and
 // only touches that owner's bookings (updateBooking checks the owner).
@@ -122,4 +123,73 @@ export async function cancelBooking(id: string, reason: string): Promise<StaffRe
   await logEmail(owner, id, "cancelled", mail);
   refresh();
   return outcome("Cancelled.", mail);
+}
+
+export type NewStaffBooking = {
+  activitySlug: string;
+  resourceId: string;
+  date: string;
+  startHour: number;
+  hours: number;
+  name: string;
+  phone: string;
+  email: string;
+  players: number;
+  notes: string;
+  /** Walk-ins who paid at the desk go straight to confirmed; phone bookings can wait for payment. */
+  status: "confirmed" | "pending";
+};
+
+/**
+ * Staff add a booking for a walk-in or phone customer. Same overlap check as
+ * customer bookings (insertBooking), but no emails and no booking-window limit.
+ */
+export async function createStaffBooking(input: NewStaffBooking): Promise<StaffResult & { id?: string }> {
+  const owner = await requireOwner();
+  const activity = await getActivity(owner.id, input.activitySlug);
+  if (!activity) return { ok: false, message: "Pick an activity." };
+  if (!activity.resources.some((r) => r.id === input.resourceId)) return { ok: false, message: `Pick a ${activity.resourceLabel.toLowerCase()}.` };
+  if (!isValidDate(input.date)) return { ok: false, message: "Pick a date." };
+
+  const { startHour, hours } = input;
+  if (!Number.isInteger(startHour) || !Number.isInteger(hours) || hours < 1) return { ok: false, message: "Pick a start time and length." };
+  if (startHour < activity.openHour || startHour + hours > activity.closeHour)
+    return { ok: false, message: `${activity.name} is open ${activity.openHour}:00–${activity.closeHour}:00.` };
+
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+  const phone = input.phone.trim();
+  if (name.length < 2) return { ok: false, message: "Enter the customer's name." };
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "That email doesn't look right." };
+  const players = Math.round(input.players);
+  if (!(players >= 1 && players <= activity.maxPlayers)) return { ok: false, message: `Players must be between 1 and ${activity.maxPlayers}.` };
+
+  const booking = await insertBooking({
+    ownerId: owner.id,
+    activitySlug: activity.slug,
+    resourceId: input.resourceId,
+    date: input.date,
+    startHour,
+    hours,
+    name: name.slice(0, 100),
+    email,
+    phone: phone.slice(0, 40),
+    players,
+    notes: input.notes.trim().slice(0, 500),
+    total: activity.pricePerHour * hours,
+  });
+  if (!booking) return { ok: false, message: "That court is already booked for part of that time." };
+
+  if (input.status === "confirmed") {
+    const settings = await readSettings(owner.id);
+    const now = new Date().toISOString();
+    await updateBooking(owner.id, booking.id, (b) => {
+      b.status = "confirmed";
+      b.approvedAt = now;
+      b.paidAt = now;
+      b.downpayment = downpaymentFor(b.total, settings.downpaymentPercent);
+    });
+  }
+  refresh();
+  return { ok: true, message: `Booked ${booking.id}.`, id: booking.id };
 }

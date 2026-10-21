@@ -1,81 +1,103 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { approveBooking, cancelBooking, markDownpaymentReceived, resendPaymentEmail, type StaffResult } from "./booking-actions";
+import { adminHref, type AdminQuery, type Mode } from "./query";
 import { addDays, formatDate } from "@/lib/time";
 
-/**
- * Day picker (Schedule tab only) and activity filter. `view` is the selected
- * status tab, or null for Schedule; it's kept in the URL when filters change.
- */
-export function Filters({
-  view,
-  date,
-  today,
-  activity,
-  activities,
-}: {
-  view: string | null;
-  date: string;
-  today: string;
-  activity: string;
-  activities: { slug: string; name: string }[];
-}) {
+/** Space filter, past/cancelled toggles and the calendar/table switch. Every change is kept in the URL. */
+export function Toolbar({ q, today, activities }: { q: AdminQuery; today: string; activities: { slug: string; name: string }[] }) {
   const router = useRouter();
-  const pathname = usePathname();
+  const go = (changes: Partial<AdminQuery>) => router.push(adminHref(q, today, changes), { scroll: false });
+  const isTable = q.mode === "table";
+  const check = "size-4 rounded border-black/20 accent-emerald-700";
 
-  function go(next: { date?: string; activity?: string }) {
-    const params = new URLSearchParams();
-    if (view) params.set("view", view);
-    else params.set("date", next.date ?? date);
-    const a = next.activity ?? activity;
-    if (a) params.set("activity", a);
-    router.push(`${pathname}?${params}`);
-  }
+  return (
+    <div className="mt-6 flex flex-wrap items-end gap-x-5 gap-y-2">
+      {/* Phones get space chips inside the calendar instead. */}
+      <label className={isTable ? "block" : "hidden md:block"}>
+        <span className="mb-1 block text-xs font-medium text-black/50">Space</span>
+        <select
+          value={q.activity}
+          onChange={(e) => go({ activity: e.target.value })}
+          className="w-48 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
+        >
+          <option value="">All spaces</option>
+          {activities.map((a) => (
+            <option key={a.slug} value={a.slug}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-2 py-2 text-sm text-black/70">
+        <input type="checkbox" className={check} checked={q.past} onChange={(e) => go({ past: e.target.checked })} />
+        Show past bookings
+      </label>
+      {!isTable && (
+        <label className="flex items-center gap-2 py-2 text-sm text-black/70">
+          <input type="checkbox" className={check} checked={q.cancelled} onChange={(e) => go({ cancelled: e.target.checked })} />
+          Show cancelled
+        </label>
+      )}
+      <Link
+        href={adminHref(q, today, isTable ? { mode: "month" } : { mode: "table", view: "schedule" })}
+        scroll={false}
+        className="ml-auto flex items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm font-medium hover:border-emerald-600"
+      >
+        <span aria-hidden>⇄</span> {isTable ? "Switch to calendar" : "Switch to table view"}
+      </Link>
+    </div>
+  );
+}
 
+/** Month / Week / Day selector on the calendar card. */
+export function ModeSelect({ q, today }: { q: AdminQuery; today: string }) {
+  const router = useRouter();
+  return (
+    <select
+      aria-label="Calendar view"
+      value={q.mode}
+      onChange={(e) => router.push(adminHref(q, today, { mode: e.target.value as Mode }), { scroll: false })}
+      className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm font-medium"
+    >
+      <option value="month">Month view</option>
+      <option value="week">Week view</option>
+      <option value="day">Day view</option>
+    </select>
+  );
+}
+
+/** Day picker for the table's Schedule tab. */
+export function DayPicker({ q, today }: { q: AdminQuery; today: string }) {
+  const router = useRouter();
+  const go = (date: string) => router.push(adminHref(q, today, { date }), { scroll: false });
   const btn = "rounded-lg border border-black/10 bg-white px-3 py-2 text-sm font-medium hover:border-emerald-600";
 
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2">
-      {view ? (
-        <span className="text-sm text-black/50">Upcoming bookings, all dates</span>
-      ) : (
-        <>
-          <button className={btn} onClick={() => go({ date: addDays(date, -1) })} aria-label="Previous day">
-            ←
-          </button>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => e.target.value && go({ date: e.target.value })}
-            className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
-          />
-          <button className={btn} onClick={() => go({ date: addDays(date, 1) })} aria-label="Next day">
-            →
-          </button>
-          {date !== today && (
-            <button className={btn} onClick={() => go({ date: today })}>
-              Today
-            </button>
-          )}
-          <span className="mx-2 hidden text-sm text-black/50 sm:inline">
-            {formatDate(date, { weekday: "long", month: "long", year: "numeric" })}
-          </span>
-        </>
+      <button className={btn} onClick={() => go(addDays(q.date, -1))} aria-label="Previous day">
+        ←
+      </button>
+      <input
+        type="date"
+        value={q.date}
+        onChange={(e) => e.target.value && go(e.target.value)}
+        className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
+      />
+      <button className={btn} onClick={() => go(addDays(q.date, 1))} aria-label="Next day">
+        →
+      </button>
+      {q.date !== today && (
+        <button className={btn} onClick={() => go(today)}>
+          Today
+        </button>
       )}
-      <select
-        value={activity}
-        onChange={(e) => go({ activity: e.target.value })}
-        className="ml-auto rounded-lg border border-black/10 bg-white px-3 py-2 text-sm"
-      >
-        <option value="">All activities</option>
-        {activities.map((a) => (
-          <option key={a.slug} value={a.slug}>
-            {a.name}
-          </option>
-        ))}
-      </select>
+      <span className="mx-2 hidden text-sm text-black/50 sm:inline">
+        {formatDate(q.date, { weekday: "long", month: "long", year: "numeric" })}
+      </span>
     </div>
   );
 }
