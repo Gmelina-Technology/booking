@@ -1,4 +1,4 @@
-import { formatHourRange, formatMoney, type Activity, type BusinessProfile, type PaymentSettings } from "./facility";
+import { formatHourRange, formatMoney, platform, type Activity, type BusinessProfile, type PaymentSettings } from "./facility";
 import type { Mail, MailImage } from "./mailer";
 import type { Booking } from "./store";
 import { formatDate } from "./time";
@@ -189,5 +189,23 @@ export function staffNewBookingEmail(ctx: Ctx, to: string, adminLink: string): M
       `<p>A customer is waiting for approval.</p>${detailsHtml(ctx, extra)}${button(adminLink, "Review in staff inbox")}`,
     ),
     text: `New booking request waiting for approval.\n\n${detailsText(ctx, extra)}\n\nReview: ${adminLink}\n`,
+  };
+}
+
+/** The one-time code that confirms a new owner's email before their account is created. */
+export function signupCodeEmail(to: string, code: string, minutes: number): Mail {
+  const brand: BusinessProfile = { name: platform.name, tagline: platform.tagline, address: "", phone: "", email: "" };
+  return {
+    to,
+    subject: `${code} is your ${platform.name} verification code`,
+    html: layout(
+      brand,
+      "Confirm your email",
+      "#047857",
+      `<p>Enter this code to finish creating your booking page:</p>
+<p style="margin:24px 0;font-size:32px;font-weight:700;letter-spacing:8px">${esc(code)}</p>
+<p>It works for ${minutes} minutes. If you didn't try to sign up, ignore this email and no account will be created.</p>`,
+    ),
+    text: `Your ${platform.name} verification code is ${code}\n\nIt works for ${minutes} minutes. If you didn't try to sign up, ignore this email and no account will be created.\n`,
   };
 }
