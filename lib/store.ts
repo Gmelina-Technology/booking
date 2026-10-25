@@ -209,3 +209,20 @@ export function recordLoginFailure(ip: string, lockMs: number) {
 export function clearLoginFailures(ip: string) {
   return backend().clearLoginFailures(ip);
 }
+
+// ---- General rate limits --------------------------------------------------
+// Reuses the login lockout table with a prefixed key (e.g. "signup-send:<ip>"),
+// so limits hold across serverless instances without another table. Each hit
+// extends the window; the count resets once the window passes without one.
+
+export function getRateLimit(key: string) {
+  return backend().getLoginFailure(key);
+}
+
+export function hitRateLimit(key: string, windowMs: number) {
+  return backend().recordLoginFailure(key, windowMs);
+}
+
+export function clearRateLimit(key: string) {
+  return backend().clearLoginFailures(key);
+}

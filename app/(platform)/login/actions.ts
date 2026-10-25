@@ -1,8 +1,8 @@
 "use server";
 
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { startSession } from "@/lib/auth";
+import { clientIp, startSession } from "@/lib/auth";
 import { verifyPassword } from "@/lib/password";
 import { authConfigured, SESSION_COOKIE } from "@/lib/session";
 import { clearLoginFailures, getLoginFailure, getOwnerByEmail, recordLoginFailure } from "@/lib/store";
@@ -21,8 +21,7 @@ function safeNext(next: unknown) {
 export async function login(_prev: string | null, form: FormData): Promise<string | null> {
   if (!authConfigured()) return "Sign-in isn't set up on this server yet (SESSION_SECRET is missing). See the README.";
 
-  const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0].trim() || h.get("x-real-ip") || "local";
+  const ip = await clientIp();
   const record = await getLoginFailure(ip);
   if (record && record.count >= MAX_ATTEMPTS) {
     const minutes = Math.ceil((record.untilMs - Date.now()) / 60000);

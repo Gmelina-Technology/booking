@@ -26,6 +26,13 @@ settings.
 - **Sign up** at `/signup`: business name, page name (the `@handle`), email and password. The
   handle is permanent because it's in the page URL: 3–30 lowercase letters, numbers or hyphens,
   with a few reserved words blocked (`admin`, `login`, …).
+- **Email verification:** sign-up has a second step. We email a 6-digit code to the address given,
+  and the account is only created once that code is entered, so nobody can register with an email
+  they don't own. Codes last 10 minutes and allow 5 wrong tries. One IP can request 5 codes an hour,
+  and one email 3 an hour. Until the code is entered, the details and password hash are held in an
+  encrypted, HTTP-only cookie (`lib/signup-verification.ts`), not in the database. A hidden
+  honeypot field also turns away form-filling bots. Sign-up needs working email (`SMTP_*` on the
+  host). Locally, read the code from `data/outbox/`.
 - **Sign in** at `/login` with email and password. Passwords are hashed with scrypt. Sessions last
   7 days in an HTTP-only cookie signed with `SESSION_SECRET`. Changing that secret signs everyone
   out. Use **Sign out** in the staff bar to end a session.
@@ -175,8 +182,11 @@ server) to see the change.
 
 - **Set `SESSION_SECRET`** on the host (see `.env.example`), and serve the site over HTTPS so the
   session cookie is only sent encrypted.
-- **Sign-up is open to anyone.** There's no email verification, password reset, spam protection or
-  platform admin yet. Add those before inviting the public.
+- **Sign-up is open to anyone with a real email.** Emails are verified with a one-time code and
+  code requests are rate-limited, but there's no password reset, CAPTCHA or platform admin yet.
+  Add those before inviting the public.
+- **Set up SMTP before opening sign-up.** Without it, verification codes can't be sent on Vercel
+  and nobody can sign up.
 - **Replace sample events.** Events marked "Sample — replace me" in `/admin/events` (from older
   installs) are placeholders. Swap in real events, or delete them.
 - **Connect Postgres and Blob** in production (see [Deploy to Vercel](#deploy-to-vercel)). The JSON

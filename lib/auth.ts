@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "./session";
@@ -39,4 +39,10 @@ export async function requireOwner(): Promise<Owner> {
   const owner = await currentOwner();
   if (!owner) redirect("/login");
   return owner;
+}
+
+/** The visitor's IP, for rate limits. Vercel and most proxies set x-forwarded-for. */
+export async function clientIp(): Promise<string> {
+  const h = await headers();
+  return h.get("x-forwarded-for")?.split(",")[0].trim() || h.get("x-real-ip") || "local";
 }

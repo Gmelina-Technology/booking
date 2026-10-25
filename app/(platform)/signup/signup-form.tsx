@@ -20,7 +20,10 @@ function suggestHandle(name: string) {
 
 export default function SignupForm() {
   const [state, action, pending] = useActionState<SignupState, FormData>(signup, {
+    step: "details",
     error: null,
+    notice: null,
+    sentTo: "",
     values: { name: "", handle: "", email: "" },
   });
   const [name, setName] = useState(state.values.name);
@@ -28,8 +31,18 @@ export default function SignupForm() {
   const [handleEdited, setHandleEdited] = useState(false);
   const shownHandle = handleEdited ? handle : handle || suggestHandle(name);
 
+  if (state.step === "verify") return <VerifyStep state={state} action={action} pending={pending} />;
+
   return (
     <form action={action} className="mt-6 space-y-4">
+      <input type="hidden" name="intent" value="start" />
+      {/* Honeypot: hidden from people and screen readers. Bots that fill every field get rejected. */}
+      <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
+        <label>
+          Website
+          <input name="website" tabIndex={-1} autoComplete="off" defaultValue="" />
+        </label>
+      </div>
       <label className="block text-sm">
         <span className="font-medium">Business name</span>
         <input
@@ -90,8 +103,58 @@ export default function SignupForm() {
         disabled={pending}
         className="w-full rounded-xl bg-emerald-700 px-6 py-3 font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
       >
-        {pending ? "Creating your page…" : "Create my page"}
+        {pending ? "Sending your code…" : "Continue"}
       </button>
+      <p className="text-center text-xs text-black/50">We&apos;ll email you a code to confirm it&apos;s you.</p>
     </form>
+  );
+}
+
+/** Second step: the 6-digit code emailed to the owner. The account is created only once it matches. */
+function VerifyStep({ state, action, pending }: { state: SignupState; action: (form: FormData) => void; pending: boolean }) {
+  return (
+    <div className="mt-6 space-y-4">
+      <form action={action} className="space-y-4">
+        <input type="hidden" name="intent" value="verify" />
+        <p className="text-sm text-black/70">
+          We sent a 6-digit code to <strong>{state.sentTo}</strong>. Enter it to create <strong>@{state.values.handle}</strong>.
+        </p>
+        <label className="block text-sm">
+          <span className="font-medium">Verification code</span>
+          <input
+            name="code"
+            required
+            autoFocus
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="\s*\d{6}\s*"
+            maxLength={8}
+            placeholder="123456"
+            className={`${input} text-center font-mono text-2xl tracking-[0.5em]`}
+          />
+        </label>
+        {state.notice && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{state.notice}</p>}
+        {state.error && (
+          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {state.error}
+          </p>
+        )}
+        <button
+          type="submit"
+          disabled={pending}
+          className="w-full rounded-xl bg-emerald-700 px-6 py-3 font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+        >
+          {pending ? "Checking…" : "Verify & create my page"}
+        </button>
+      </form>
+      <form action={action} className="flex items-center justify-between text-sm">
+        <button name="intent" value="resend" disabled={pending} className="font-semibold text-emerald-700 hover:underline disabled:opacity-60">
+          Send a new code
+        </button>
+        <button name="intent" value="restart" disabled={pending} className="text-black/60 hover:underline disabled:opacity-60">
+          Change details
+        </button>
+      </form>
+    </div>
   );
 }
