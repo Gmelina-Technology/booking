@@ -157,7 +157,7 @@ async function verifyCode(prev: SignupState, raw: string): Promise<SignupState> 
   if (!settings.staffNotifyEmail) await writeSettings(owner!.id, { ...settings, staffNotifyEmail: pending.email });
 
   updateTag(OWNERS_TAG);
-  await startSession(owner!.id);
+  await startSession(owner!);
   redirect("/admin/business?welcome=1");
 }
 
