@@ -58,6 +58,8 @@ export type Owner = {
   /** Sign-in email, lowercase and unique. */
   email: string;
   passwordHash: string;
+  /** Goes up to revoke every session issued before (lib/session.ts). Missing means 0. */
+  sessionVersion?: number;
   createdAt: string;
   profile: BusinessProfile;
 };

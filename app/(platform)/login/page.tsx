@@ -29,6 +29,15 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
 }
 
 async function LoginFormWithNext({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { next } = await searchParams;
-  return <LoginForm next={typeof next === "string" ? next : "/admin"} />;
+  const { next, signedOut } = await searchParams;
+  return (
+    <>
+      {signedOut === "all" && (
+        <p role="status" className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          You&apos;ve been signed out on all devices.
+        </p>
+      )}
+      <LoginForm next={typeof next === "string" ? next : "/admin"} />
+    </>
+  );
 }

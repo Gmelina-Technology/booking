@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { clientIp, startSession } from "@/lib/auth";
+import { clientIp, sessionVersion, startSession } from "@/lib/auth";
 import { passwordResetEmail } from "@/lib/emails";
 import { sendMail } from "@/lib/mailer";
 import { hashPassword } from "@/lib/password";
@@ -62,18 +62,22 @@ export async function resetPassword(_prev: string | null, form: FormData): Promi
   if (!owner) return expired;
 
   const passwordHash = await hashPassword(password);
+  let updated;
   try {
-    await updateOwner(owner.id, (o) => {
+    updated = await updateOwner(owner.id, (o) => {
       // Re-checked under the lock, so two tabs can't both use one link.
       if (!resetTokenMatches(o, token)) throw new LinkUsed();
       o.passwordHash = passwordHash;
+      // Whoever had the old password may be signed in somewhere: sign out every device.
+      o.sessionVersion = sessionVersion(o) + 1;
     });
   } catch (err) {
     if (err instanceof LinkUsed) return expired;
     throw err;
   }
+  if (!updated) return expired;
 
   await clearLoginFailures(await clientIp());
-  await startSession(owner.id);
+  await startSession(updated);
   redirect("/admin");
 }

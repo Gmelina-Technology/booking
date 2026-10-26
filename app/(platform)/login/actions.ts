@@ -2,10 +2,10 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { clientIp, startSession } from "@/lib/auth";
+import { clientIp, requireOwner, sessionVersion, startSession } from "@/lib/auth";
 import { verifyPassword } from "@/lib/password";
 import { authConfigured, SESSION_COOKIE } from "@/lib/session";
-import { clearLoginFailures, getLoginFailure, getOwnerByEmail, recordLoginFailure } from "@/lib/store";
+import { clearLoginFailures, getLoginFailure, getOwnerByEmail, recordLoginFailure, updateOwner } from "@/lib/store";
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000;
@@ -36,11 +36,22 @@ export async function login(_prev: string | null, form: FormData): Promise<strin
   }
 
   await clearLoginFailures(ip);
-  await startSession(owner.id);
+  await startSession(owner);
   redirect(safeNext(form.get("next")));
 }
 
+/** Signs out this browser only. */
 export async function logout() {
   (await cookies()).delete(SESSION_COOKIE);
   redirect("/login");
+}
+
+/** Revokes every session for this account, on every device (e.g. after losing a phone). */
+export async function logoutEverywhere() {
+  const owner = await requireOwner();
+  await updateOwner(owner.id, (o) => {
+    o.sessionVersion = sessionVersion(o) + 1;
+  });
+  (await cookies()).delete(SESSION_COOKIE);
+  redirect("/login?signedOut=all");
 }
