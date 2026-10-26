@@ -18,6 +18,22 @@ npm run dev
 
 Open http://localhost:3000 and click **Create your page**.
 
+Checks (the same ones CI runs on every pull request, in `.github/workflows/ci.yml`):
+
+```bash
+npm run lint
+npx next typegen && npx tsc --noEmit
+npm test        # Vitest: sessions, passwords, reset links, bookings, holds, rate limits
+npm run build
+```
+
+Tests live in `tests/`. Store tests run against the JSON file store in a temp folder, so they
+need no database.
+
+**Security headers** (Content-Security-Policy, HSTS, X-Frame-Options and others) are set for
+every route in `next.config.ts`. The CSP allows inline scripts because nonces would turn off
+Partial Prerendering. If you add a third-party script, image host or API, add its origin there.
+
 ## Accounts
 
 Each business owner has their own account and sees only their own bookings, activities, events and
@@ -35,7 +51,11 @@ settings.
   host). Locally, read the code from `data/outbox/`.
 - **Sign in** at `/login` with email and password. Passwords are hashed with scrypt. Sessions last
   7 days in an HTTP-only cookie signed with `SESSION_SECRET`. Changing that secret signs everyone
-  out. Use **Sign out** in the staff bar to end a session.
+  out. Use **Sign out** in the staff bar to end the session on that browser.
+- **Sign out on all devices** (Business tab) revokes every session for the account, for example
+  after a lost phone. Each session carries the account's session version, and `currentOwner()`
+  (`lib/auth.ts`) rejects any session older than the version stored on the account. Resetting the
+  password raises the version too.
 - **Staff area** at `/admin` (the same URL for everyone) shows the signed-in owner's data. The
   **Business** tab edits the name, tagline, address, phone and contact email shown on their page
   and in emails.
@@ -45,8 +65,8 @@ settings.
   for 30 minutes, and signs the owner in after they choose a new password. The link is signed with
   `SESSION_SECRET` over the current password hash (`lib/password-reset.ts`), so it stops working once
   the password changes and nothing is stored. The page never says whether an email has an account.
-  One IP can ask for 5 links an hour, and one email 3. Existing sessions on other devices are not
-  signed out by a reset.
+  One IP can ask for 5 links an hour, and one email 3. A reset signs the account out on every other
+  device.
 - **Brute-force protection:** 5 wrong passwords from one IP locks that IP out for 15 minutes.
 - **How it's enforced:** `proxy.ts` redirects signed-out visitors away from `/admin/*`. Every
   staff server action and admin data loader also calls `requireOwner()` (`lib/auth.ts`) and scopes

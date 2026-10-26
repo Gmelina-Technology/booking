@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      # Route types (PageProps, LayoutProps, RouteContext) are generated, not committed.
+      - run: npx next typegen
+      - run: npx tsc --noEmit
+      - run: npm test
+      # No DATABASE_URL here, so the build uses the empty JSON file store.
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
