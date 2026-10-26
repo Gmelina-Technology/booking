@@ -58,6 +58,10 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
             <Field label="Account name" name="accountName" defaultValue={settings.accountName} placeholder="As shown in the app" />
             <Field label="Account / mobile number" name="accountNumber" defaultValue={settings.accountNumber} placeholder="0917 000 0000" />
           </div>
+          <p className="text-xs text-black/50">
+            If the customer hasn&apos;t entered a payment reference by then, the booking is cancelled automatically, the slot is freed and the
+            customer is emailed.
+          </p>
           <label className="block text-sm">
             <span className="font-medium">Payment instructions</span>
             <textarea name="instructions" rows={3} maxLength={500} defaultValue={settings.instructions} className={inputClass} />

@@ -41,6 +41,12 @@ settings.
   and in emails.
 - **New accounts** start with the sample activities from `defaultActivities` (edit or hide them),
   no events, and new-booking alerts sent to their sign-up email.
+- **Forgot password** at `/reset-password` (linked from sign-in). We email a link that works once,
+  for 30 minutes, and signs the owner in after they choose a new password. The link is signed with
+  `SESSION_SECRET` over the current password hash (`lib/password-reset.ts`), so it stops working once
+  the password changes and nothing is stored. The page never says whether an email has an account.
+  One IP can ask for 5 links an hour, and one email 3. Existing sessions on other devices are not
+  signed out by a reset.
 - **Brute-force protection:** 5 wrong passwords from one IP locks that IP out for 15 minutes.
 - **How it's enforced:** `proxy.ts` redirects signed-out visitors away from `/admin/*`. Every
   staff server action and admin data loader also calls `requireOwner()` (`lib/auth.ts`) and scopes
@@ -64,8 +70,18 @@ sign up its owner first. `STAFF_PASSWORD` is no longer used, and old staff sessi
 | **Confirmed** | Downpayment verified. The customer gets a confirmation email. The balance is paid at the front desk. | — |
 | **Cancelled** | Declined or cancelled by staff, with an optional reason. The customer is emailed and the slot is freed. | — |
 
-The staff bar shows a **"N to review"** badge for new requests and payments to verify. Bookings
-still unpaid after the payment window are flagged so staff can release the slot.
+The staff bar shows a **"N to review"** badge for new requests and payments to verify.
+
+**Unpaid holds are released automatically.** Once the payment window (Settings) passes after
+approval with no payment reference entered, the booking is cancelled, the slot is freed and the
+customer is emailed (`lib/holds.ts`). This happens as soon as anyone views that day's slots or makes
+a booking, when staff open the inbox, and in a daily sweep for every business
+(`/api/cron/release-holds`, scheduled in `vercel.json` and protected by `CRON_SECRET`). A booking
+with a payment reference is never released automatically: staff check it and decide.
+
+**Public actions are rate-limited** per visitor IP, counted in the store (Postgres in production):
+10 booking requests an hour per IP and 5 per customer email per business, and 10 payment-reference
+submissions an hour per IP and 5 per booking.
 
 ### Payment & email setup
 
@@ -88,6 +104,8 @@ Every email sent is logged on the booking. A failed send shows in red in the sta
 | `/p/@[handle]/activities/[slug]` | Booking flow: date → court → time (1–N consecutive hours) → details |
 | `/bookings/[token]` | Private confirmation page. The URL holds a 32-character random token, so it can't be guessed from the short booking reference. Email and phone are masked. |
 | `/login` | Owner sign-in |
+| `/reset-password` | Forgot password: emails a one-time link to `/reset-password/<token>` |
+| `/api/cron/release-holds` | Daily sweep that releases unpaid holds (Vercel cron, needs `CRON_SECRET`) |
 | `/admin/business` | The owner's page link and the business details shown on it |
 | `/admin` | Staff inbox (new requests, payments to verify, unpaid) and the day-by-day schedule |
 | `/admin/settings` | Downpayment %, payment QR, account details, staff alert email, test email |
@@ -167,7 +185,7 @@ server) to see the change.
 3. **Add file storage:** Storage → create a **Blob** store and connect it. It sets
    `BLOB_READ_WRITE_TOKEN`. If you create it as private, also set `BLOB_ACCESS=private`.
 4. **Set environment variables** (Settings → Environment Variables, see `.env.example`):
-   `SESSION_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`,
+   `SESSION_SECRET`, `CRON_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`,
    `MAIL_FROM`, and `SITE_URL` once you have a custom domain. Without `SITE_URL`, email links use
    Vercel's production domain.
 5. **Deploy.** The build reads the business directory from the database, so connect the database
@@ -183,7 +201,7 @@ server) to see the change.
 - **Set `SESSION_SECRET`** on the host (see `.env.example`), and serve the site over HTTPS so the
   session cookie is only sent encrypted.
 - **Sign-up is open to anyone with a real email.** Emails are verified with a one-time code and
-  code requests are rate-limited, but there's no password reset, CAPTCHA or platform admin yet.
+  code requests are rate-limited, but there's no CAPTCHA or platform admin yet.
   Add those before inviting the public.
 - **Set up SMTP before opening sign-up.** Without it, verification codes can't be sent on Vercel
   and nobody can sign up.
@@ -195,4 +213,5 @@ server) to see the change.
   `SITE_URL`, and send a test email.
 - **Payments are checked by hand.** Staff match the customer's reference against the GCash/Maya
   account. For automatic confirmation, integrate a payment gateway such as PayMongo.
-- **Unpaid holds aren't released automatically.** Overdue bookings are flagged and staff cancel them.
+- **Set `CRON_SECRET`** so the daily hold-release sweep runs. Vercel's Hobby plan allows daily crons
+  only. On Pro you can make the schedule in `vercel.json` hourly.

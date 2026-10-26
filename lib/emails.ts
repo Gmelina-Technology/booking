@@ -209,3 +209,21 @@ export function signupCodeEmail(to: string, code: string, minutes: number): Mail
     text: `Your ${platform.name} verification code is ${code}\n\nIt works for ${minutes} minutes. If you didn't try to sign up, ignore this email and no account will be created.\n`,
   };
 }
+
+/** Link to choose a new password, sent from /reset-password. */
+export function passwordResetEmail(to: string, link: string, minutes: number): Mail {
+  const brand: BusinessProfile = { name: platform.name, tagline: platform.tagline, address: "", phone: "", email: "" };
+  return {
+    to,
+    subject: `Reset your ${platform.name} password`,
+    html: layout(
+      brand,
+      "Reset your password",
+      "#047857",
+      `<p>Someone asked to reset the password for your ${esc(platform.name)} account. Choose a new one here:</p>
+${button(link, "Choose a new password")}
+<p>The link works once, for ${minutes} minutes. If you didn't ask for this, ignore this email and your password stays the same.</p>`,
+    ),
+    text: `Choose a new ${platform.name} password: ${link}\n\nThe link works once, for ${minutes} minutes. If you didn't ask for this, ignore this email and your password stays the same.\n`,
+  };
+}

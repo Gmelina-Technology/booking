@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { getActivity } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
+import { bookingEmailContext, logBookingEmail } from "@/lib/booking-mail";
 import { cancelledEmail, confirmedEmail, paymentRequestEmail } from "@/lib/emails";
 import { downpaymentFor } from "@/lib/facility";
 import { sendMail, type MailImage, type MailResult } from "@/lib/mailer";
@@ -30,19 +31,12 @@ async function transition(owner: Owner, id: string, from: Booking["status"][], c
   }
 }
 
-async function logEmail(owner: Owner, id: string, kind: EmailKind, result: MailResult) {
-  await updateBooking(owner.id, id, (b) => {
-    b.emails = [...(b.emails ?? []), { kind, at: new Date().toISOString(), ok: result.ok, detail: result.detail }];
-  });
+function logEmail(owner: Owner, id: string, kind: EmailKind, result: MailResult) {
+  return logBookingEmail(owner.id, id, kind, result);
 }
 
 async function context(owner: Owner, booking: Booking) {
-  return {
-    booking,
-    business: owner.profile,
-    activity: await getActivity(owner.id, booking.activitySlug),
-    link: booking.accessToken ? `${await siteUrl()}/bookings/${booking.accessToken}` : await siteUrl(),
-  };
+  return bookingEmailContext(owner.id, owner.profile, booking, await siteUrl());
 }
 
 async function sendPaymentRequest(owner: Owner, booking: Booking): Promise<MailResult> {
