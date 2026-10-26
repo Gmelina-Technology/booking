@@ -3,12 +3,24 @@
 import { refresh } from "next/cache";
 import { after } from "next/server";
 import { getActivity } from "@/lib/activities";
+import { clientIp } from "@/lib/auth";
 import { staffNewBookingEmail } from "@/lib/emails";
+import { releaseOverdueHolds } from "@/lib/holds";
 import { sendMail } from "@/lib/mailer";
 import { getPublicOwnerById } from "@/lib/owners";
+import { overLimit } from "@/lib/rate-limit";
 import { siteUrl } from "@/lib/site-url";
 import { getBookingByToken, holdsSlot, insertBooking, listBookings, readSettings, updateBooking } from "@/lib/store";
 import { bookableDates, facilityNow, isValidDate } from "@/lib/time";
+
+// Public actions: anyone can call them, so they're rate-limited per visitor IP
+// (and per customer email or booking) to stop scripts holding every court or
+// flooding staff inboxes. Limits are counted in the store (Postgres in production).
+const HOUR_MS = 60 * 60 * 1000;
+const MAX_BOOKINGS_PER_IP = 10;
+const MAX_BOOKINGS_PER_EMAIL = 5;
+const MAX_REFERENCES_PER_IP = 10;
+const MAX_REFERENCES_PER_BOOKING = 5;
 
 export type Availability = {
   date: string;
@@ -23,9 +35,10 @@ export async function getAvailability(ownerId: string, activitySlug: string, dat
   if (!activity || !isValidDate(date)) throw new Error("Unknown activity or date");
 
   const bookings = await listBookings({ ownerId, activitySlug, date });
+  const released = await releaseOverdueHolds(ownerId, bookings);
   const booked: Record<string, number[]> = {};
   for (const b of bookings) {
-    if (!holdsSlot(b)) continue;
+    if (!holdsSlot(b) || released.has(b.id)) continue;
     for (let h = b.startHour; h < b.startHour + b.hours; h++) (booked[b.resourceId] ??= []).push(h);
   }
   const now = facilityNow();
@@ -68,11 +81,20 @@ export async function createBooking(input: {
   const email = input.email.trim().toLowerCase();
   const phone = input.phone.trim();
   if (name.length < 2) return { ok: false, error: "Please enter your name." };
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "Please enter a valid email." };
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "Please enter a valid email." };
   if (phone.replace(/\D/g, "").length < 7) return { ok: false, error: "Please enter a valid phone number." };
   const players = Math.round(input.players);
   if (!(players >= 1 && players <= activity.maxPlayers))
     return { ok: false, error: `Players must be between 1 and ${activity.maxPlayers}.` };
+
+  if (
+    (await overLimit(`book:${await clientIp()}`, MAX_BOOKINGS_PER_IP, HOUR_MS)) ||
+    (await overLimit(`book-email:${owner.id}:${email}`, MAX_BOOKINGS_PER_EMAIL, HOUR_MS))
+  )
+    return { ok: false, error: "Too many booking requests. Please wait an hour, or call the business to book." };
+
+  // An unpaid hold past its payment window shouldn't block this slot.
+  await releaseOverdueHolds(owner.id, await listBookings({ ownerId: owner.id, activitySlug: activity.slug, date: input.date }));
 
   const booking = await insertBooking({
     ownerId: owner.id,
@@ -115,8 +137,11 @@ export async function createBooking(input: {
 export async function submitPaymentReference(token: string, reference: string): Promise<{ ok: boolean; error?: string }> {
   const ref = reference.trim();
   if (!/^[A-Za-z0-9 -]{4,40}$/.test(ref)) return { ok: false, error: "Enter the reference number from your payment receipt." };
+  const tooMany = { ok: false, error: "Too many attempts. Please wait an hour, or contact the business." };
+  if (await overLimit(`payref:${await clientIp()}`, MAX_REFERENCES_PER_IP, HOUR_MS)) return tooMany;
   const booking = await getBookingByToken(token);
   if (!booking) return { ok: false, error: "Booking not found." };
+  if (await overLimit(`payref-booking:${booking.id}`, MAX_REFERENCES_PER_BOOKING, HOUR_MS)) return tooMany;
   if (booking.status !== "awaiting_payment") return { ok: false, error: "This booking isn't waiting for a payment." };
   await updateBooking(booking.ownerId, booking.id, (b) => {
     b.paymentRef = ref;

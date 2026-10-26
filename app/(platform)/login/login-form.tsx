@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { login } from "./actions";
 
@@ -25,7 +26,12 @@ export default function LoginForm({ next }: { next: string }) {
         />
       </label>
       <label className="block text-sm">
-        <span className="font-medium">Password</span>
+        <span className="flex items-baseline justify-between">
+          <span className="font-medium">Password</span>
+          <Link href="/reset-password" className="text-xs font-semibold text-emerald-700 hover:underline">
+            Forgot password?
+          </Link>
+        </span>
         <input
           name="password"
           type="password"

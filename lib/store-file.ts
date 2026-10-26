@@ -97,9 +97,15 @@ export const fileStore: StoreBackend = {
     });
   },
 
-  async listBookings({ ownerId, activitySlug, date }) {
+  async listBookings({ ownerId, activitySlug, date, status }) {
     return (await readAll())
-      .filter((b) => b.ownerId === ownerId && (!activitySlug || b.activitySlug === activitySlug) && (!date || b.date === date))
+      .filter(
+        (b) =>
+          b.ownerId === ownerId &&
+          (!activitySlug || b.activitySlug === activitySlug) &&
+          (!date || b.date === date) &&
+          (!status || b.status === status),
+      )
       .sort((a, b) => a.date.localeCompare(b.date) || a.startHour - b.startHour);
   },
 

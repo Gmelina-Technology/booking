@@ -183,13 +183,14 @@ export const postgresStore: StoreBackend = {
     }) as Promise<Owner | null>;
   },
 
-  async listBookings({ ownerId, activitySlug, date }) {
+  async listBookings({ ownerId, activitySlug, date, status }) {
     const q = await db();
     const rows = await q<Row[]>`
       SELECT data FROM bookings
       WHERE owner_id = ${ownerId}
         AND (${activitySlug ?? null}::text IS NULL OR activity_slug = ${activitySlug ?? null})
         AND (${date ?? null}::text IS NULL OR date = ${date ?? null})
+        AND (${status ?? null}::text IS NULL OR status = ${status ?? null})
       ORDER BY date, start_hour`;
     return rows.map((r) => r.data);
   },

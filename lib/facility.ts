@@ -204,7 +204,7 @@ export type PaymentSettings = {
   accountNumber: string;
   /** Uploaded QR image (file name in the uploads store), or null. */
   qrPhoto: string | null;
-  /** Hours the customer has to pay before staff may release the slot. */
+  /** Hours after approval the customer has to pay (enter a reference) before the slot is released automatically (lib/holds.ts). */
   paymentWindowHours: number;
   /** Extra instructions shown in the email and on the booking page. */
   instructions: string;

@@ -62,7 +62,7 @@ export type Owner = {
   profile: BusinessProfile;
 };
 
-export type BookingFilter = { ownerId: string; activitySlug?: string; date?: string };
+export type BookingFilter = { ownerId: string; activitySlug?: string; date?: string; status?: BookingStatus };
 
 /** The small JSON documents each owner has alongside their bookings. */
 export type DocKind = "activities" | "events" | "settings" | "hero";

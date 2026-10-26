@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
 import { formatHourRange, formatMoney, platform, type Activity } from "@/lib/facility";
+import { releaseOverdueHolds } from "@/lib/holds";
 import { holdsSlot, listBookings, readSettings, type Booking } from "@/lib/store";
 import { addDays, addMonths, endOfMonth, facilityNow, formatDate, isoWeek, startOfMonth, startOfWeek } from "@/lib/time";
 import { DayStrip, DayTimeline, Legend, MonthGrid, WeekGrid, hourRange, type Column } from "./calendar";
@@ -52,7 +53,7 @@ const VIEWS: { key: ViewKey; label: string; match: ((b: Booking) => boolean) | n
 const viewHints: Partial<Record<ViewKey, string>> = {
   requests: "Approve to email the customer the payment QR, or decline.",
   verify: "The customer says they've paid. Find the reference in your account, then confirm.",
-  unpaid: "Approved and emailed, but no payment reference yet.",
+  unpaid: "Approved and emailed, but no payment reference yet. Released automatically once the payment window passes.",
 };
 
 async function BookingsView({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -61,6 +62,8 @@ async function BookingsView({ searchParams }: { searchParams: Promise<Record<str
   const owner = await requireOwner();
   const now = facilityNow();
   const today = now.date;
+  // Free up unpaid holds past the payment window before showing the schedule.
+  await releaseOverdueHolds(owner.id);
   const [activities, all, settings] = await Promise.all([getAllActivities(owner.id), listBookings({ ownerId: owner.id }), readSettings(owner.id)]);
   const activityBySlug = new Map(activities.map((a) => [a.slug, a]));
   const q = parseQuery(sp, today, (slug) => activityBySlug.has(slug));
