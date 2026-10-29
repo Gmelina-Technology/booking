@@ -38,6 +38,8 @@ export type Booking = {
   total: number;
   status: BookingStatus;
   createdAt: string;
+  /** Entered by staff (walk-in or phone), so never declined automatically as unreviewed. */
+  staffCreated?: boolean;
   /** Amount due up front, fixed when staff approve the booking. */
   downpayment?: number;
   approvedAt?: string;
@@ -48,6 +50,8 @@ export type Booking = {
   cancelledAt?: string;
   cancelReason?: string;
   emails?: EmailLogEntry[];
+  /** When staff erased the customer's personal details (name, email, phone, notes, payment reference). */
+  erasedAt?: string;
 };
 
 /** A business owner's account. Each one has a public page at /p/@<handle>. */
@@ -85,6 +89,8 @@ export interface StoreBackend {
   insertOwner(owner: Owner): Promise<InsertOwnerResult>;
   /** Atomically applies `change`; if `change` throws, nothing is written. */
   updateOwner(id: string, change: (o: Owner) => void): Promise<Owner | null>;
+  /** Deletes the account with all its bookings and documents. Uploaded files are deleted by the caller. */
+  deleteOwner(id: string): Promise<void>;
 
   listBookings(filter: BookingFilter): Promise<Booking[]>;
   findBooking(by: "id" | "accessToken", value: string): Promise<Booking | undefined>;

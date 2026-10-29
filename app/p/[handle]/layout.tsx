@@ -88,6 +88,14 @@ async function Footer({ params }: { params: Promise<{ handle: string }> }) {
         <Link href="/" className="hover:text-black/70 hover:underline">
           {platform.name}
         </Link>
+        {" · "}
+        <Link href="/privacy" className="hover:text-black/70 hover:underline">
+          Privacy
+        </Link>
+        {" · "}
+        <Link href="/terms" className="hover:text-black/70 hover:underline">
+          Terms
+        </Link>
       </p>
     </div>
   );

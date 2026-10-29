@@ -3,7 +3,6 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { requireOwner } from "@/lib/auth";
 import { ownerPath } from "@/lib/owners";
-import { logoutEverywhere } from "../../login/actions";
 import BusinessForm from "./business-form";
 
 export const metadata = { title: "Staff — business" };
@@ -54,23 +53,15 @@ async function Business({ searchParams }: { searchParams: Promise<Record<string,
             Open page ↗
           </Link>
         </div>
-        <p className="mt-3 text-xs text-black/50">Signed in as {owner.email}</p>
+        <p className="mt-3 text-xs text-black/50">
+          Signed in as {owner.email}.{" "}
+          <Link href="/admin/account" className="underline hover:text-black">
+            Manage your account
+          </Link>
+        </p>
       </section>
 
       <BusinessForm profile={owner.profile} />
-
-      <section className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
-        <h2 className="font-semibold">Signed-in devices</h2>
-        <p className="mt-1 text-sm text-black/60">
-          Lost a phone, or shared the password with someone who has left? Sign out everywhere, including this browser. Everyone will need the
-          password to sign in again. Resetting your password does this too.
-        </p>
-        <form action={logoutEverywhere} className="mt-3">
-          <button type="submit" className="rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
-            Sign out on all devices
-          </button>
-        </form>
-      </section>
     </div>
   );
 }

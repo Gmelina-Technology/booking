@@ -183,6 +183,15 @@ export const postgresStore: StoreBackend = {
     }) as Promise<Owner | null>;
   },
 
+  async deleteOwner(id) {
+    const q = await db();
+    await q.begin(async (tx) => {
+      await tx`DELETE FROM bookings WHERE owner_id = ${id}`;
+      await tx`DELETE FROM documents WHERE key LIKE ${`owners/${id}/%`}`;
+      await tx`DELETE FROM owners WHERE id = ${id}`;
+    });
+  },
+
   async listBookings({ ownerId, activitySlug, date, status }) {
     const q = await db();
     const rows = await q<Row[]>`

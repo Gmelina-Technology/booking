@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Booking, DocKind, LoginFailure, Owner, StoreBackend } from "./store-types";
 
@@ -94,6 +94,14 @@ export const fileStore: StoreBackend = {
       change(owner);
       await writeJson(OWNERS_FILE, owners);
       return owner;
+    });
+  },
+
+  deleteOwner(id) {
+    return exclusive(async () => {
+      await writeAll((await readAll()).filter((b) => b.ownerId !== id));
+      await rm(path.join(DATA_DIR, "owners", id), { recursive: true, force: true });
+      await writeJson(OWNERS_FILE, (await readOwners()).filter((o) => o.id !== id));
     });
   },
 

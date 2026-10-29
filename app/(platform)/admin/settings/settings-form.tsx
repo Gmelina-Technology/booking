@@ -54,13 +54,15 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Downpayment (% of total)" name="downpaymentPercent" type="number" min={0} max={100} defaultValue={settings.downpaymentPercent} required />
             <Field label="Customer has (hours) to pay" name="paymentWindowHours" type="number" min={1} max={168} defaultValue={settings.paymentWindowHours} required />
+            <Field label="You have (hours) to review a request" name="requestWindowHours" type="number" min={1} max={168} defaultValue={settings.requestWindowHours} required />
             <Field label="Payment method" name="methodName" defaultValue={settings.methodName} placeholder="GCash, Maya, InstaPay…" />
             <Field label="Account name" name="accountName" defaultValue={settings.accountName} placeholder="As shown in the app" />
             <Field label="Account / mobile number" name="accountNumber" defaultValue={settings.accountNumber} placeholder="0917 000 0000" />
           </div>
           <p className="text-xs text-black/50">
-            If the customer hasn&apos;t entered a payment reference by then, the booking is cancelled automatically, the slot is freed and the
-            customer is emailed.
+            If the customer hasn&apos;t entered a payment reference in time, the booking is cancelled automatically, the slot is freed and the
+            customer is emailed. Requests you haven&apos;t approved or declined in time, or by their start time, are declined the same way.
+            Bookings you add yourself are never declined automatically.
           </p>
           <label className="block text-sm">
             <span className="font-medium">Payment instructions</span>

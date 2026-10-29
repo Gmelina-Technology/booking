@@ -10,6 +10,7 @@ const tabs = [
   { href: "/admin/settings", label: "Settings" },
   { href: "/admin/banner", label: "Banner" },
   { href: "/admin/business", label: "Business" },
+  { href: "/admin/account", label: "Account" },
 ];
 
 export default function AdminTabs() {

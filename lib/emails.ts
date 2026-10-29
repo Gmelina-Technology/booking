@@ -192,9 +192,12 @@ export function staffNewBookingEmail(ctx: Ctx, to: string, adminLink: string): M
   };
 }
 
+/** Platform emails (not from a business) use the platform name as the sender brand. */
+const platformBrand = (): BusinessProfile => ({ name: platform.name, tagline: platform.tagline, address: "", phone: "", email: "" });
+
 /** The one-time code that confirms a new owner's email before their account is created. */
 export function signupCodeEmail(to: string, code: string, minutes: number): Mail {
-  const brand: BusinessProfile = { name: platform.name, tagline: platform.tagline, address: "", phone: "", email: "" };
+  const brand = platformBrand();
   return {
     to,
     subject: `${code} is your ${platform.name} verification code`,
@@ -212,7 +215,7 @@ export function signupCodeEmail(to: string, code: string, minutes: number): Mail
 
 /** Link to choose a new password, sent from /reset-password. */
 export function passwordResetEmail(to: string, link: string, minutes: number): Mail {
-  const brand: BusinessProfile = { name: platform.name, tagline: platform.tagline, address: "", phone: "", email: "" };
+  const brand = platformBrand();
   return {
     to,
     subject: `Reset your ${platform.name} password`,
@@ -225,5 +228,38 @@ ${button(link, "Choose a new password")}
 <p>The link works once, for ${minutes} minutes. If you didn't ask for this, ignore this email and your password stays the same.</p>`,
     ),
     text: `Choose a new ${platform.name} password: ${link}\n\nThe link works once, for ${minutes} minutes. If you didn't ask for this, ignore this email and your password stays the same.\n`,
+  };
+}
+
+
+/** Sent to the NEW address when an owner asks to change their sign-in email. */
+export function emailChangeEmail(to: string, link: string, minutes: number): Mail {
+  return {
+    to,
+    subject: `Confirm your new ${platform.name} sign-in email`,
+    html: layout(
+      platformBrand(),
+      "Confirm your new email",
+      "#047857",
+      `<p>Someone asked to use this address to sign in to a ${esc(platform.name)} account. Confirm it here:</p>
+${button(link, "Use this email")}
+<p>The link works once, for ${minutes} minutes. If you didn't ask for this, ignore this email and nothing changes.</p>`,
+    ),
+    text: `Confirm your new ${platform.name} sign-in email: ${link}\n\nThe link works once, for ${minutes} minutes. If you didn't ask for this, ignore this email and nothing changes.\n`,
+  };
+}
+
+/** A short security notice to an owner, e.g. after their password or email changed. */
+export function accountNoticeEmail(to: string, heading: string, message: string): Mail {
+  return {
+    to,
+    subject: `${heading} · ${platform.name}`,
+    html: layout(
+      platformBrand(),
+      heading,
+      "#52525b",
+      `<p>${esc(message)}</p><p>If this wasn't you, reset your password from the sign-in page right away, or reply to this email.</p>`,
+    ),
+    text: `${heading}\n\n${message}\n\nIf this wasn't you, reset your password from the sign-in page right away, or reply to this email.\n`,
   };
 }
