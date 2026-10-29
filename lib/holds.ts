@@ -12,7 +12,7 @@ import { listBookings, readSettings, updateBooking, type Booking } from "./store
 //
 // This runs wherever it matters, so a slot frees up the moment someone needs it:
 //   - when customers view or book a day (app/actions.ts), for that day
-//   - when staff open the inbox (admin/page.tsx), for the whole business
+//   - when staff open the overview or a bookings page (admin/page.tsx, admin/bookings-view.tsx), for the whole business
 //   - once a day for every business (app/api/cron/release-holds, vercel.json)
 //
 // Bookings with a payment reference are never released automatically: the

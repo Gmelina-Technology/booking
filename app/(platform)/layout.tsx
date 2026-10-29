@@ -28,7 +28,7 @@ function SignedOutLinks() {
   );
 }
 
-/** Header and footer for the platform's own pages: home, sign-up, sign-in, the staff area and booking links. */
+/** Header and footer for the platform's own pages: home, sign-up, sign-in, and booking links. */
 export default function PlatformLayout({ children }: { children: React.ReactNode }) {
   return (
     <>

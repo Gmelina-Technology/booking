@@ -3,15 +3,14 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { requireOwner } from "@/lib/auth";
 import { ownerPath } from "@/lib/owners";
-import { logoutEverywhere } from "../../login/actions";
 import BusinessForm from "./business-form";
 
-export const metadata = { title: "Staff — business" };
+export const metadata = { title: "Staff — business profile" };
 
 export default function BusinessPage({ searchParams }: PageProps<"/admin/business">) {
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
-      <h1 className="text-3xl font-bold tracking-tight">Your business</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Business profile</h1>
       <p className="mt-1 text-black/60">Your public booking page and the details customers see.</p>
       <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-2xl bg-black/5" />}>
         <Business searchParams={searchParams} />
@@ -38,7 +37,7 @@ async function Business({ searchParams }: { searchParams: Promise<Record<string,
             </Link>
             , and upload your payment QR in{" "}
             <Link href="/admin/settings" className="font-semibold underline">
-              Settings
+              Payments &amp; alerts
             </Link>
             . We started you off with a few sample activities. Edit or hide the ones you don&apos;t offer.
           </p>
@@ -54,23 +53,9 @@ async function Business({ searchParams }: { searchParams: Promise<Record<string,
             Open page ↗
           </Link>
         </div>
-        <p className="mt-3 text-xs text-black/50">Signed in as {owner.email}</p>
       </section>
 
       <BusinessForm profile={owner.profile} />
-
-      <section className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
-        <h2 className="font-semibold">Signed-in devices</h2>
-        <p className="mt-1 text-sm text-black/60">
-          Lost a phone, or shared the password with someone who has left? Sign out everywhere, including this browser. Everyone will need the
-          password to sign in again. Resetting your password does this too.
-        </p>
-        <form action={logoutEverywhere} className="mt-3">
-          <button type="submit" className="rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
-            Sign out on all devices
-          </button>
-        </form>
-      </section>
     </div>
   );
 }

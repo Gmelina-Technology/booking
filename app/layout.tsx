@@ -19,7 +19,8 @@ export const metadata: Metadata = {
 };
 
 // Headers and footers live in the nested layouts: app/(platform)/layout.tsx for
-// the platform's own pages, app/p/[handle]/layout.tsx for each business page.
+// the platform's own pages, app/(staff)/layout.tsx for the staff area,
+// app/p/[handle]/layout.tsx for each business page.
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>

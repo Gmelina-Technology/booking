@@ -5,12 +5,12 @@ import { smtpConfigured } from "@/lib/mailer";
 import { readSettings } from "@/lib/store";
 import SettingsForm from "./settings-form";
 
-export const metadata = { title: "Staff — settings" };
+export const metadata = { title: "Staff — payments & alerts" };
 
 export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
-      <h1 className="text-3xl font-bold tracking-tight">Payment &amp; email settings</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Payments &amp; alerts</h1>
       <p className="mt-1 text-black/60">
         What customers see in the downpayment email after you approve their booking.
       </p>
