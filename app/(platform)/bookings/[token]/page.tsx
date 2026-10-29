@@ -119,7 +119,7 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
 function header(b: Booking, settings: PaymentSettings): [string, string, string, string] {
   switch (b.status) {
     case "pending":
-      return ["⏳", "Request received", "We're checking availability. You'll get an email with payment instructions once staff approve your booking.", "bg-blue-600"];
+      return ["⏳", "Request received", `We're checking availability. You'll get an email with payment instructions once staff approve your booking. If they can't review it within ${settings.requestWindowHours} hours, the slot is released and we'll email you.`, "bg-blue-600"];
     case "awaiting_payment":
       return ["💳", "Approved: pay to confirm", `Pay the downpayment within ${settings.paymentWindowHours} hours to lock in your slot.`, "bg-amber-600"];
     case "confirmed":

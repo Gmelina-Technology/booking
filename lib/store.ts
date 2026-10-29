@@ -65,6 +65,11 @@ export function updateOwner(id: string, change: (o: Owner) => void) {
   return backend().updateOwner(id, change);
 }
 
+/** Deletes the account, its bookings and its documents. Delete its uploads first (see (staff)/admin/account/actions.ts). */
+export function deleteOwner(id: string) {
+  return backend().deleteOwner(id);
+}
+
 // ---- Bookings -------------------------------------------------------------
 
 export function listBookings(filter: BookingFilter) {

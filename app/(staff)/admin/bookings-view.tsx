@@ -8,7 +8,7 @@ import { releaseOverdueHolds } from "@/lib/holds";
 import { holdsSlot, listBookings, readSettings, type Booking } from "@/lib/store";
 import { addDays, addMonths, endOfMonth, facilityNow, formatDate, isoWeek, startOfMonth, startOfWeek } from "@/lib/time";
 import { DayStrip, DayTimeline, Legend, MonthGrid, WeekGrid, hourRange, type Column } from "./calendar";
-import { BookingActions, DayPicker, ModeSelect, Toolbar } from "./controls";
+import { BookingActions, DayPicker, EraseCustomerButton, ModeSelect, Toolbar } from "./controls";
 import { CreateBooking } from "./create-booking";
 import { PageHeader } from "./page-header";
 import { adminHref, parseQuery, sectionOf, type AdminQuery, type Section, type ViewKey } from "./query";
@@ -52,7 +52,7 @@ const VIEWS: { key: ViewKey; section: Section; label: string; match: ((b: Bookin
 ];
 
 const viewHints: Partial<Record<ViewKey, string>> = {
-  requests: "Approve to email the customer the payment QR, or decline.",
+  requests: "Approve to email the customer the payment QR, or decline. Requests not reviewed in time (see Payments & alerts) are declined automatically.",
   verify: "The customer says they've paid. Find the reference in your account, then confirm.",
   unpaid: "Approved and emailed, but no payment reference yet. Released automatically once the payment window passes.",
 };
@@ -393,7 +393,19 @@ function BookingPanel({ closeHref, ...props }: RowProps & { closeHref: string })
               <dd className="text-right">{b.cancelReason}</dd>
             </>
           )}
+          {b.erasedAt && (
+            <>
+              <dt>Customer details erased</dt>
+              <dd className="text-right">{new Date(b.erasedAt).toLocaleString(platform.locale, { timeZone: platform.timeZone, dateStyle: "medium" })}</dd>
+            </>
+          )}
         </dl>
+        {/* Only once the booking is cancelled or over, so an active booking can't lose its contact details. */}
+        {!b.erasedAt && (b.status === "cancelled" || b.date < facilityNow().date) && (
+          <div className="mx-4 mb-4">
+            <EraseCustomerButton id={b.id} />
+          </div>
+        )}
       </aside>
     </div>
   );

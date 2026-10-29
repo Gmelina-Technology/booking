@@ -2,7 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { approveBooking, cancelBooking, markDownpaymentReceived, resendPaymentEmail, type StaffResult } from "./booking-actions";
+import {
+  approveBooking,
+  cancelBooking,
+  eraseCustomerDetails,
+  markDownpaymentReceived,
+  resendPaymentEmail,
+  type StaffResult,
+} from "./booking-actions";
 import { adminHref, type AdminQuery, type Mode } from "./query";
 import { addDays, formatDate } from "@/lib/time";
 
@@ -152,6 +159,33 @@ Reason (optional, included in the email):`);
       </div>
       {pending && <p className="text-xs text-black/50">Working…</p>}
       {result && <p className={`max-w-xs text-right text-xs ${result.ok ? "text-emerald-700" : "text-red-700"}`}>{result.message}</p>}
+    </div>
+  );
+}
+
+/** Erases a finished booking's customer details, e.g. when the customer asks (Data Privacy Act). */
+export function EraseCustomerButton({ id }: { id: string }) {
+  const [pending, start] = useTransition();
+  const [result, setResult] = useState<StaffResult | null>(null);
+
+  function erase() {
+    if (!confirm(`Erase the customer's name, email, phone, notes and payment reference from ${id}? The booking itself stays. This can't be undone.`))
+      return;
+    setResult(null);
+    start(async () => setResult(await eraseCustomerDetails(id)));
+  }
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={erase}
+        className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+      >
+        {pending ? "Erasing…" : "Erase customer details"}
+      </button>
+      {result && <p className={`text-xs ${result.ok ? "text-emerald-700" : "text-red-700"}`}>{result.message}</p>}
     </div>
   );
 }

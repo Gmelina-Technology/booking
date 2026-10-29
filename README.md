@@ -51,13 +51,23 @@ settings.
   host). Locally, read the code from `data/outbox/`.
 - **Sign in** at `/login` with email and password. Passwords are hashed with scrypt. Sessions last
   7 days in an HTTP-only cookie signed with `SESSION_SECRET`. Changing that secret signs everyone
-  out. Use **Sign out** in the staff bar to end the session on that browser.
-- **Sign out on all devices** (Business tab) revokes every session for the account, for example
+  out. Use **Sign out** at the top right of the staff area to end the session on that browser.
+- **Account & security** (`/admin/account`): every change here asks for the current password (5 tries per
+  15 minutes).
+  - **Change password.** Signs out every other device and emails the owner a notice.
+  - **Change sign-in email.** We email a link to the new address (`lib/email-change.ts`), and the
+    email only changes when the owner opens it and presses **Use this email**. The link works once,
+    for 60 minutes. The old address gets a notice. Whether another account already uses the address
+    is only checked at that point, so the form can't reveal who has an account.
+  - **Delete account.** The owner types their page name and password. It's refused while any
+    upcoming booking is still active, so customers are told by cancelling first. Then it deletes the
+    owner, every booking, their documents and uploaded photos, and emails a notice.
+- **Sign out on all devices** (Account & security) revokes every session for the account, for example
   after a lost phone. Each session carries the account's session version, and `currentOwner()`
   (`lib/auth.ts`) rejects any session older than the version stored on the account. Resetting the
   password raises the version too.
-- **Staff area** at `/admin` (the same URL for everyone) shows the signed-in owner's data. The
-  **Business** tab edits the name, tagline, address, phone and contact email shown on their page
+- **Staff area** at `/admin` (the same URL for everyone) shows the signed-in owner's data. Its
+  menu groups bookings, catalog, the public page and settings. **Business profile** edits the name, tagline, address, phone and contact email shown on their page
   and in emails.
 - **New accounts** start with the sample activities from `defaultActivities` (edit or hide them),
   no events, and new-booking alerts sent to their sign-up email.
@@ -88,16 +98,21 @@ sign up its owner first. `STAFF_PASSWORD` is no longer used, and old staff sessi
 | **Awaiting payment** | Staff approved. The customer is emailed the downpayment amount, the payment QR and a link to their private booking page. | Customer pays, then enters the payment reference on their booking page |
 | **Awaiting payment** + reference | The customer says they've paid. The booking moves to **Payments to verify** in the staff inbox. | Staff check the account, then **Downpayment received** |
 | **Confirmed** | Downpayment verified. The customer gets a confirmation email. The balance is paid at the front desk. | — |
-| **Cancelled** | Declined or cancelled by staff, with an optional reason. The customer is emailed and the slot is freed. | — |
+| **Cancelled** | Declined or cancelled by staff (with an optional reason), or released automatically (below). The customer is emailed and the slot is freed. | — |
 
 The staff bar shows a **"N to review"** badge for new requests and payments to verify.
 
-**Unpaid holds are released automatically.** Once the payment window (Settings) passes after
-approval with no payment reference entered, the booking is cancelled, the slot is freed and the
-customer is emailed (`lib/holds.ts`). This happens as soon as anyone views that day's slots or makes
-a booking, when staff open the inbox, and in a daily sweep for every business
-(`/api/cron/release-holds`, scheduled in `vercel.json` and protected by `CRON_SECRET`). A booking
-with a payment reference is never released automatically: staff check it and decide.
+**Holds are released automatically** (`lib/holds.ts`). The booking is cancelled, the slot is freed
+and the customer is emailed when:
+
+- an approved booking passes its payment window (Settings, default 24 hours) with no payment
+  reference entered. With a reference, staff check it and decide;
+- a request isn't approved or declined within the review window (Settings, default 48 hours), or its
+  start time arrives first. Bookings staff add themselves (walk-ins, phone bookings) are left alone.
+
+This happens as soon as anyone views that day's slots or makes a booking, when staff open the
+inbox, and in a daily sweep for every business (`/api/cron/release-holds`, scheduled in
+`vercel.json` and protected by `CRON_SECRET`).
 
 **Public actions are rate-limited** per visitor IP, counted in the store (Postgres in production):
 10 booking requests an hour per IP and 5 per customer email per business, and 10 payment-reference
@@ -105,7 +120,7 @@ submissions an hour per IP and 5 per booking.
 
 ### Payment & email setup
 
-1. Sign in and open **Settings** (`/admin/settings`). Upload your GCash/Maya **Receive money QR**,
+1. Sign in and open **Payments & alerts** (`/admin/settings`). Upload your GCash/Maya **Receive money QR**,
    and set the account name and number, downpayment %, payment window, and the staff alert email.
 2. Set the `SMTP_*` variables and `SITE_URL` (see `.env.example`). Use **Send test email** on the
    Settings page to check delivery. Until `SMTP_HOST` is set, emails are saved as HTML files in
@@ -126,12 +141,18 @@ Every email sent is logged on the booking. A failed send shows in red in the sta
 | `/login` | Owner sign-in |
 | `/reset-password` | Forgot password: emails a one-time link to `/reset-password/<token>` |
 | `/api/cron/release-holds` | Daily sweep that releases unpaid holds (Vercel cron, needs `CRON_SECRET`) |
-| `/admin/business` | The owner's page link and the business details shown on it |
-| `/admin` | Staff inbox (new requests, payments to verify, unpaid) and the day-by-day schedule |
-| `/admin/settings` | Downpayment %, payment QR, account details, staff alert email, test email |
+| `/admin/business` | Business profile: the owner's page link and the business details shown on it |
+| `/admin/account` | Account & security: change sign-in email or password, sign out everywhere, delete the account |
+| `/account/confirm-email/<token>` | Confirms a new sign-in email from the emailed link |
+| `/privacy`, `/terms` | Privacy notice and terms of service (linked from every footer, sign-up and the booking form) |
+| `/admin` | Staff overview: what needs a decision, today's schedule, this week's totals |
+| `/admin/inbox` | New requests, payments to verify, and approved bookings awaiting payment |
+| `/admin/calendar` | Month, week and day calendar of bookings |
+| `/admin/bookings` | All bookings by status, plus the day-by-day schedule |
+| `/admin/settings` | Payments & alerts: downpayment %, payment QR, account details, staff alert email, test email |
 | `/admin/activities` | Staff view: add, edit, reorder, hide or delete activities |
 | `/admin/events` | Staff view: past events (with photos) shown on the business page |
-| `/admin/banner` | Staff view: the business page banner's template, text, photos, colours and buttons, with a live preview |
+| `/admin/banner` | Page design: the business page banner's template, text, photos, colours and buttons, with a live preview |
 
 The route folders are `app/(platform)/` (platform header and footer) and `app/p/[handle]/` (the
 business's own header and footer). The `@` in `/p/@handle` is optional when typed, so
@@ -216,6 +237,18 @@ server) to see the change.
 7. Sign up at `/signup` (the first account adopts any data from the single-business version), then
    upload the payment QR in **Settings** and send a test email.
 
+## Privacy
+
+The privacy notice (`/privacy`) and terms (`/terms`) are a starting template written for the
+Philippine Data Privacy Act. Customers' booking details belong to the facility (the personal
+information controller), and the platform processes them for it.
+
+- **A customer asks to be removed:** open the booking and use **Erase customer details**. It
+  replaces the name and removes the email, phone, notes, payment reference and the addresses in the
+  email log. The booking's time and court stay. It's only offered once a booking is cancelled or
+  over, so cancel an upcoming one first (the customer is emailed).
+- **An owner leaves:** **Delete account** on Account & security removes everything they own.
+
 ## Before going live
 
 - **Set `SESSION_SECRET`** on the host (see `.env.example`), and serve the site over HTTPS so the
@@ -225,6 +258,9 @@ server) to see the change.
   Add those before inviting the public.
 - **Set up SMTP before opening sign-up.** Without it, verification codes can't be sent on Vercel
   and nobody can sign up.
+- **Fill in the legal details and review the wording.** Set `operator`, `privacyEmail` and
+  `legalUpdated` in `platform` (`lib/facility.ts`). They're placeholders now. Have the privacy
+  notice and terms checked for your business, including which providers you actually use.
 - **Replace sample events.** Events marked "Sample — replace me" in `/admin/events` (from older
   installs) are placeholders. Swap in real events, or delete them.
 - **Connect Postgres and Blob** in production (see [Deploy to Vercel](#deploy-to-vercel)). The JSON

@@ -9,7 +9,7 @@ import { downpaymentFor } from "@/lib/facility";
 import { sendMail, type MailImage, type MailResult } from "@/lib/mailer";
 import { siteUrl } from "@/lib/site-url";
 import { insertBooking, readSettings, readUpload, UPLOAD_TYPES, updateBooking, type Booking, type EmailKind, type Owner } from "@/lib/store";
-import { isValidDate } from "@/lib/time";
+import { facilityNow, isValidDate } from "@/lib/time";
 
 // Every action here is staff-only: each one starts with requireOwner(), and
 // only touches that owner's bookings (updateBooking checks the owner).
@@ -119,6 +119,33 @@ export async function cancelBooking(id: string, reason: string): Promise<StaffRe
   return outcome("Cancelled.", mail);
 }
 
+/**
+ * Erases the customer's personal details from a finished booking, e.g. when
+ * they ask under the Data Privacy Act. The booking itself (time, court,
+ * amounts) stays for the schedule and your records.
+ */
+export async function eraseCustomerDetails(id: string): Promise<StaffResult> {
+  const owner = await requireOwner();
+  const today = facilityNow().date;
+  const booking = await transition(owner, id, ["pending", "awaiting_payment", "confirmed", "cancelled"], (b) => {
+    if (b.erasedAt) throw new StateError(`Booking ${id}'s customer details were already erased.`);
+    if (b.status !== "cancelled" && b.date >= today)
+      throw new StateError(`Booking ${id} is still active. Cancel it first (the customer is emailed), then erase their details.`);
+    b.name = "Erased customer";
+    b.email = "";
+    b.phone = "";
+    b.notes = "";
+    b.paymentRef = undefined;
+    // Email log lines name the address they went to.
+    b.emails = b.emails?.map((e) => ({ ...e, detail: "Details erased" }));
+    b.erasedAt = new Date().toISOString();
+  });
+  if (!booking) return { ok: false, message: "Booking not found." };
+  if (booking instanceof StateError) return { ok: false, message: booking.message };
+  refresh();
+  return { ok: true, message: `Customer details erased from ${id}.` };
+}
+
 export type NewStaffBooking = {
   activitySlug: string;
   resourceId: string;
@@ -171,6 +198,7 @@ export async function createStaffBooking(input: NewStaffBooking): Promise<StaffR
     players,
     notes: input.notes.trim().slice(0, 500),
     total: activity.pricePerHour * hours,
+    staffCreated: true,
   });
   if (!booking) return { ok: false, message: "That court is already booked for part of that time." };
 

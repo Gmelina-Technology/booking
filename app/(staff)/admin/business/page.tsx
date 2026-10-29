@@ -53,6 +53,12 @@ async function Business({ searchParams }: { searchParams: Promise<Record<string,
             Open page ↗
           </Link>
         </div>
+        <p className="mt-3 text-xs text-black/50">
+          Signed in as {owner.email}.{" "}
+          <Link href="/admin/account" className="underline hover:text-black">
+            Manage your account
+          </Link>
+        </p>
       </section>
 
       <BusinessForm profile={owner.profile} />

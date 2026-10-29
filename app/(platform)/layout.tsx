@@ -54,9 +54,15 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
           <p>
             <span className="font-semibold text-black">{platform.name}</span> · {platform.tagline}
           </p>
-          <p>
+          <p className="flex gap-4">
             <Link href="/signup" className="hover:text-black hover:underline">
               List your facility
+            </Link>
+            <Link href="/privacy" className="hover:text-black hover:underline">
+              Privacy
+            </Link>
+            <Link href="/terms" className="hover:text-black hover:underline">
+              Terms
             </Link>
           </p>
         </div>

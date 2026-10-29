@@ -34,6 +34,12 @@ export const platform = {
   locale: "en-PH",
   /** How many days ahead customers can book. */
   bookingWindowDays: 14,
+  /** Who runs the site, shown in the privacy notice and terms (/privacy, /terms). Set both before launch. */
+  operator: "Courtside",
+  /** Where people send privacy requests (Data Privacy Act). */
+  privacyEmail: "privacy@your-domain.com",
+  /** Date the privacy notice and terms last changed, shown on those pages. */
+  legalUpdated: "2026-10-29",
 };
 
 /** What a business shows on its page, in emails and in the footer. Edited at /admin/business. */
@@ -206,6 +212,8 @@ export type PaymentSettings = {
   qrPhoto: string | null;
   /** Hours after approval the customer has to pay (enter a reference) before the slot is released automatically (lib/holds.ts). */
   paymentWindowHours: number;
+  /** Hours a customer request can wait for staff review before it is declined automatically (lib/holds.ts). */
+  requestWindowHours: number;
   /** Extra instructions shown in the email and on the booking page. */
   instructions: string;
   /** Where new-booking alerts go. Empty to turn them off. */
@@ -219,6 +227,7 @@ export const defaultPaymentSettings: PaymentSettings = {
   accountNumber: "",
   qrPhoto: null,
   paymentWindowHours: 24,
+  requestWindowHours: 48,
   instructions: "Scan the QR code, pay the downpayment, then enter your payment reference number on your booking page.",
   staffNotifyEmail: "",
 };
