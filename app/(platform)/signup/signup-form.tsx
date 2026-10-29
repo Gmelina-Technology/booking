@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { MIN_PASSWORD_LENGTH } from "@/lib/password-rules";
 import { signup, type SignupState } from "./actions";
@@ -105,7 +106,17 @@ export default function SignupForm() {
       >
         {pending ? "Sending your code…" : "Continue"}
       </button>
-      <p className="text-center text-xs text-black/50">We&apos;ll email you a code to confirm it&apos;s you.</p>
+      <p className="text-center text-xs text-black/50">
+        We&apos;ll email you a code to confirm it&apos;s you. By continuing, you agree to the{" "}
+        <Link href="/terms" target="_blank" className="underline hover:text-black">
+          terms
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" target="_blank" className="underline hover:text-black">
+          privacy notice
+        </Link>
+        .
+      </p>
     </form>
   );
 }

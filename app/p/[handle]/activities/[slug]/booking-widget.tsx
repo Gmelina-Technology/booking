@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { createBooking, getAvailability, type Availability } from "@/app/actions";
@@ -272,7 +273,12 @@ export default function BookingWidget({ ownerId, activity }: { ownerId: string; 
               {submitting ? "Sending request…" : `Request booking · ${formatMoney(activity.pricePerHour * selection.hours)}`}
             </button>
             <p className="text-center text-xs text-black/50">
-              We hold the slot while staff review it, then email you a QR code to pay the downpayment.
+              We hold the slot while staff review it, then email you a QR code to pay the downpayment. Your details go to this facility to
+              manage your booking (
+              <Link href="/privacy" target="_blank" className="underline hover:text-black">
+                privacy notice
+              </Link>
+              ).
             </p>
           </form>
         ) : (

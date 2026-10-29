@@ -82,37 +82,77 @@ describe("bookings", () => {
   });
 });
 
-describe("releasing unpaid holds", () => {
-  it("knows when a hold is overdue", () => {
-    const base = { status: "awaiting_payment", approvedAt: new Date(Date.now() - 25 * HOUR).toISOString() } as const;
-    expect(holds.isOverdue(base as never, 24)).toBe(true);
-    expect(holds.isOverdue(base as never, 48)).toBe(false);
-    expect(holds.isOverdue({ ...base, paymentRef: "REF1234" } as never, 24)).toBe(false);
-    expect(holds.isOverdue({ ...base, status: "confirmed" } as never, 24)).toBe(false);
+describe("releasing expired holds", () => {
+  const windows = { paymentWindowHours: 24, requestWindowHours: 48 };
+  const ago = (h: number) => new Date(Date.now() - h * HOUR).toISOString();
+  const future = { date: "2030-01-15", startHour: 10 };
+
+  it("knows when an unpaid hold has expired", () => {
+    const base = { ...future, status: "awaiting_payment", createdAt: ago(30), approvedAt: ago(25) } as const;
+    expect(holds.expiryReason(base as never, windows)).toBe(holds.UNPAID_REASON);
+    expect(holds.expiryReason(base as never, { ...windows, paymentWindowHours: 48 })).toBeNull();
+    expect(holds.expiryReason({ ...base, paymentRef: "REF1234" } as never, windows)).toBeNull();
+    expect(holds.expiryReason({ ...base, status: "confirmed" } as never, windows)).toBeNull();
   });
 
-  it("frees overdue unpaid slots and leaves the rest", async () => {
+  it("knows when an unreviewed request has expired", () => {
+    const base = { ...future, status: "pending", createdAt: ago(50) } as const;
+    expect(holds.expiryReason(base as never, windows)).toBe(holds.UNREVIEWED_REASON);
+    expect(holds.expiryReason({ ...base, createdAt: ago(1) } as never, windows)).toBeNull();
+    // Its start time has passed, however recent the request.
+    expect(holds.expiryReason({ ...base, createdAt: ago(1), date: "2020-01-01" } as never, windows)).toBe(holds.UNREVIEWED_REASON);
+    // Staff entered it themselves.
+    expect(holds.expiryReason({ ...base, staffCreated: true } as never, windows)).toBeNull();
+  });
+
+  it("frees expired slots and leaves the rest", async () => {
     const owner = await newOwner("holds");
-    const overdue = (await store.insertBooking(slot(owner.id, 8)))!;
-    const paid = (await store.insertBooking(slot(owner.id, 12)))!;
-    const fresh = (await store.insertBooking(slot(owner.id, 16)))!;
+    const overdue = (await store.insertBooking(slot(owner.id, 6)))!;
+    const paid = (await store.insertBooking(slot(owner.id, 8)))!;
+    const fresh = (await store.insertBooking(slot(owner.id, 10)))!;
+    const staleRequest = (await store.insertBooking(slot(owner.id, 12)))!;
+    const newRequest = (await store.insertBooking(slot(owner.id, 14)))!;
+    const phoneBooking = (await store.insertBooking({ ...slot(owner.id, 16), staffCreated: true }))!;
     await approve(owner.id, overdue.id, 30);
     await approve(owner.id, paid.id, 30, "REF12345");
     await approve(owner.id, fresh.id, 1);
+    for (const id of [staleRequest.id, phoneBooking.id]) await store.updateBooking(owner.id, id, (b) => void (b.createdAt = ago(72)));
 
     afterCallbacks.length = 0;
     const released = await holds.releaseOverdueHolds(owner.id);
-    expect([...released]).toEqual([overdue.id]);
+    expect([...released].sort()).toEqual([overdue.id, staleRequest.id].sort());
     expect(afterCallbacks).toHaveLength(1);
 
     const byId = new Map((await store.listBookings({ ownerId: owner.id })).map((b) => [b.id, b]));
-    expect(byId.get(overdue.id)).toMatchObject({ status: "cancelled", cancelReason: holds.EXPIRED_REASON });
+    expect(byId.get(overdue.id)).toMatchObject({ status: "cancelled", cancelReason: holds.UNPAID_REASON });
+    expect(byId.get(staleRequest.id)).toMatchObject({ status: "cancelled", cancelReason: holds.UNREVIEWED_REASON });
     expect(byId.get(paid.id)?.status).toBe("awaiting_payment");
     expect(byId.get(fresh.id)?.status).toBe("awaiting_payment");
+    expect(byId.get(newRequest.id)?.status).toBe("pending");
+    expect(byId.get(phoneBooking.id)?.status).toBe("pending");
 
     // The freed slot can be booked again, and a second sweep does nothing.
-    expect(await store.insertBooking(slot(owner.id, 8))).not.toBeNull();
+    expect(await store.insertBooking(slot(owner.id, 6))).not.toBeNull();
     expect((await holds.releaseOverdueHolds(owner.id)).size).toBe(0);
+  });
+});
+
+describe("deleting an account", () => {
+  it("removes the owner, their bookings and documents, and nobody else's", async () => {
+    const gone = await newOwner("leaving");
+    const stays = await newOwner("staying");
+    await store.insertBooking(slot(gone.id, 10));
+    const kept = (await store.insertBooking(slot(stays.id, 10)))!;
+    await store.writeSettings(gone.id, { ...(await store.readSettings(gone.id)), accountName: "Leaving Co" });
+
+    await store.deleteOwner(gone.id);
+
+    expect(await store.getOwnerById(gone.id)).toBeUndefined();
+    expect(await store.listBookings({ ownerId: gone.id })).toEqual([]);
+    expect((await store.readSettings(gone.id)).accountName).toBe("");
+    expect((await store.listBookings({ ownerId: stays.id })).map((b) => b.id)).toEqual([kept.id]);
+    // The handle and email are free again.
+    expect((await store.insertOwner({ handle: "leaving", email: "leaving@example.test", passwordHash: "x", profile: gone.profile })).result).toBe("ok");
   });
 });
 

@@ -18,11 +18,14 @@ export async function saveSettings(form: FormData): Promise<{ ok: boolean; messa
 
   const downpaymentPercent = Number(form.get("downpaymentPercent"));
   const paymentWindowHours = Number(form.get("paymentWindowHours"));
+  const requestWindowHours = Number(form.get("requestWindowHours"));
   const staffNotifyEmail = String(form.get("staffNotifyEmail") ?? "").trim();
   if (!Number.isInteger(downpaymentPercent) || downpaymentPercent < 0 || downpaymentPercent > 100)
     return { ok: false, message: "Downpayment must be a whole percent from 0 to 100." };
   if (!Number.isInteger(paymentWindowHours) || paymentWindowHours < 1 || paymentWindowHours > 168)
     return { ok: false, message: "Payment window must be 1 to 168 hours." };
+  if (!Number.isInteger(requestWindowHours) || requestWindowHours < 1 || requestWindowHours > 168)
+    return { ok: false, message: "Review window must be 1 to 168 hours." };
   if (staffNotifyEmail && !EMAIL.test(staffNotifyEmail)) return { ok: false, message: "Staff alert email isn't valid." };
 
   let qrPhoto = current.qrPhoto;
@@ -39,6 +42,7 @@ export async function saveSettings(form: FormData): Promise<{ ok: boolean; messa
   const next: PaymentSettings = {
     downpaymentPercent,
     paymentWindowHours,
+    requestWindowHours,
     staffNotifyEmail,
     methodName: String(form.get("methodName") ?? "").trim().slice(0, 40) || "GCash",
     accountName: String(form.get("accountName") ?? "").trim().slice(0, 80),
