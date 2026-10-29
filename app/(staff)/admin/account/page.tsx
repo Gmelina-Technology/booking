@@ -1,15 +1,15 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { requireOwner } from "@/lib/auth";
-import { logoutEverywhere } from "../../login/actions";
+import { logoutEverywhere } from "@/app/(platform)/login/actions";
 import { ChangeEmailForm, ChangePasswordForm, DeleteAccountForm } from "./account-forms";
 
-export const metadata = { title: "Staff — account" };
+export const metadata = { title: "Staff — account & security" };
 
 export default function AccountPage({ searchParams }: PageProps<"/admin/account">) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
-      <h1 className="text-3xl font-bold tracking-tight">Account</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Account &amp; security</h1>
       <p className="mt-1 text-black/60">How you sign in, and your account itself.</p>
       <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-2xl bg-black/5" />}>
         <Account searchParams={searchParams} />
@@ -41,7 +41,7 @@ async function Account({ searchParams }: { searchParams: Promise<Record<string, 
       <section className={card}>
         <h2 className="font-semibold">Sign-in email</h2>
         <p className="mt-1 text-sm text-black/60">
-          You sign in as <strong className="text-black">{owner.email}</strong>. This is separate from the contact email on your page (Business tab).
+          You sign in as <strong className="text-black">{owner.email}</strong>. This is separate from the contact email on your page (Business profile).
         </p>
         <ChangeEmailForm />
       </section>

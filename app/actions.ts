@@ -121,7 +121,7 @@ export async function createBooking(input: {
         staffNewBookingEmail(
           { booking, activity, business: owner.profile, link: `${base}/bookings/${booking.accessToken}` },
           staffNotifyEmail,
-          `${base}/admin`,
+          `${base}/admin/inbox`,
         ),
       );
       if (!result.ok) console.error("Staff alert email failed:", result.detail);

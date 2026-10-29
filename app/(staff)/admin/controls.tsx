@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
@@ -14,7 +13,7 @@ import {
 import { adminHref, type AdminQuery, type Mode } from "./query";
 import { addDays, formatDate } from "@/lib/time";
 
-/** Space filter, past/cancelled toggles and the calendar/table switch. Every change is kept in the URL. */
+/** Space filter and past/cancelled toggles. Every change is kept in the URL. */
 export function Toolbar({ q, today, activities }: { q: AdminQuery; today: string; activities: { slug: string; name: string }[] }) {
   const router = useRouter();
   const go = (changes: Partial<AdminQuery>) => router.push(adminHref(q, today, changes), { scroll: false });
@@ -49,13 +48,6 @@ export function Toolbar({ q, today, activities }: { q: AdminQuery; today: string
           Show cancelled
         </label>
       )}
-      <Link
-        href={adminHref(q, today, isTable ? { mode: "month" } : { mode: "table", view: "schedule" })}
-        scroll={false}
-        className="ml-auto flex items-center gap-2 rounded-lg border border-black/10 bg-white px-3 py-2 text-sm font-medium hover:border-emerald-600"
-      >
-        <span aria-hidden>⇄</span> {isTable ? "Switch to calendar" : "Switch to table view"}
-      </Link>
     </div>
   );
 }

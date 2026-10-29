@@ -8,12 +8,12 @@ import { ownerPath } from "@/lib/owners";
 import { readHero } from "@/lib/store";
 import BannerEditor from "./banner-editor";
 
-export const metadata = { title: "Staff — page banner" };
+export const metadata = { title: "Staff — page design" };
 
 export default function BannerPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-10">
-      <h1 className="text-3xl font-bold tracking-tight">Page banner</h1>
+      <h1 className="text-3xl font-bold tracking-tight">Page design</h1>
       <p className="mt-1 text-black/60">The first thing customers see on your booking page. Pick a template, then make it yours.</p>
       <Suspense fallback={<div className="mt-8 h-[36rem] animate-pulse rounded-2xl bg-black/5" />}>
         <Banner />

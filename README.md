@@ -51,8 +51,8 @@ settings.
   host). Locally, read the code from `data/outbox/`.
 - **Sign in** at `/login` with email and password. Passwords are hashed with scrypt. Sessions last
   7 days in an HTTP-only cookie signed with `SESSION_SECRET`. Changing that secret signs everyone
-  out. Use **Sign out** in the staff bar to end the session on that browser.
-- **Account tab** (`/admin/account`): every change here asks for the current password (5 tries per
+  out. Use **Sign out** at the top right of the staff area to end the session on that browser.
+- **Account & security** (`/admin/account`): every change here asks for the current password (5 tries per
   15 minutes).
   - **Change password.** Signs out every other device and emails the owner a notice.
   - **Change sign-in email.** We email a link to the new address (`lib/email-change.ts`), and the
@@ -62,12 +62,12 @@ settings.
   - **Delete account.** The owner types their page name and password. It's refused while any
     upcoming booking is still active, so customers are told by cancelling first. Then it deletes the
     owner, every booking, their documents and uploaded photos, and emails a notice.
-- **Sign out on all devices** (Account tab) revokes every session for the account, for example
+- **Sign out on all devices** (Account & security) revokes every session for the account, for example
   after a lost phone. Each session carries the account's session version, and `currentOwner()`
   (`lib/auth.ts`) rejects any session older than the version stored on the account. Resetting the
   password raises the version too.
-- **Staff area** at `/admin` (the same URL for everyone) shows the signed-in owner's data. The
-  **Business** tab edits the name, tagline, address, phone and contact email shown on their page
+- **Staff area** at `/admin` (the same URL for everyone) shows the signed-in owner's data. Its
+  menu groups bookings, catalog, the public page and settings. **Business profile** edits the name, tagline, address, phone and contact email shown on their page
   and in emails.
 - **New accounts** start with the sample activities from `defaultActivities` (edit or hide them),
   no events, and new-booking alerts sent to their sign-up email.
@@ -120,7 +120,7 @@ submissions an hour per IP and 5 per booking.
 
 ### Payment & email setup
 
-1. Sign in and open **Settings** (`/admin/settings`). Upload your GCash/Maya **Receive money QR**,
+1. Sign in and open **Payments & alerts** (`/admin/settings`). Upload your GCash/Maya **Receive money QR**,
    and set the account name and number, downpayment %, payment window, and the staff alert email.
 2. Set the `SMTP_*` variables and `SITE_URL` (see `.env.example`). Use **Send test email** on the
    Settings page to check delivery. Until `SMTP_HOST` is set, emails are saved as HTML files in
@@ -141,15 +141,18 @@ Every email sent is logged on the booking. A failed send shows in red in the sta
 | `/login` | Owner sign-in |
 | `/reset-password` | Forgot password: emails a one-time link to `/reset-password/<token>` |
 | `/api/cron/release-holds` | Daily sweep that releases unpaid holds (Vercel cron, needs `CRON_SECRET`) |
-| `/admin/business` | The owner's page link and the business details shown on it |
-| `/admin/account` | Change sign-in email or password, sign out everywhere, delete the account |
+| `/admin/business` | Business profile: the owner's page link and the business details shown on it |
+| `/admin/account` | Account & security: change sign-in email or password, sign out everywhere, delete the account |
 | `/account/confirm-email/<token>` | Confirms a new sign-in email from the emailed link |
 | `/privacy`, `/terms` | Privacy notice and terms of service (linked from every footer, sign-up and the booking form) |
-| `/admin` | Staff inbox (new requests, payments to verify, unpaid) and the day-by-day schedule |
-| `/admin/settings` | Downpayment %, payment QR, account details, staff alert email, test email |
+| `/admin` | Staff overview: what needs a decision, today's schedule, this week's totals |
+| `/admin/inbox` | New requests, payments to verify, and approved bookings awaiting payment |
+| `/admin/calendar` | Month, week and day calendar of bookings |
+| `/admin/bookings` | All bookings by status, plus the day-by-day schedule |
+| `/admin/settings` | Payments & alerts: downpayment %, payment QR, account details, staff alert email, test email |
 | `/admin/activities` | Staff view: add, edit, reorder, hide or delete activities |
 | `/admin/events` | Staff view: past events (with photos) shown on the business page |
-| `/admin/banner` | Staff view: the business page banner's template, text, photos, colours and buttons, with a live preview |
+| `/admin/banner` | Page design: the business page banner's template, text, photos, colours and buttons, with a live preview |
 
 The route folders are `app/(platform)/` (platform header and footer) and `app/p/[handle]/` (the
 business's own header and footer). The `@` in `/p/@handle` is optional when typed, so
@@ -244,7 +247,7 @@ information controller), and the platform processes them for it.
   replaces the name and removes the email, phone, notes, payment reference and the addresses in the
   email log. The booking's time and court stay. It's only offered once a booking is cancelled or
   over, so cancel an upcoming one first (the customer is emailed).
-- **An owner leaves:** **Delete account** on the Account tab removes everything they own.
+- **An owner leaves:** **Delete account** on Account & security removes everything they own.
 
 ## Before going live
 

@@ -10,53 +10,69 @@ import { addDays, addMonths, endOfMonth, facilityNow, formatDate, isoWeek, start
 import { DayStrip, DayTimeline, Legend, MonthGrid, WeekGrid, hourRange, type Column } from "./calendar";
 import { BookingActions, DayPicker, EraseCustomerButton, ModeSelect, Toolbar } from "./controls";
 import { CreateBooking } from "./create-booking";
-import { adminHref, parseQuery, type AdminQuery, type ViewKey } from "./query";
+import { PageHeader } from "./page-header";
+import { adminHref, parseQuery, sectionOf, type AdminQuery, type Section, type ViewKey } from "./query";
 
-export const metadata = { title: "Staff — bookings" };
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-export default function AdminPage({ searchParams }: PageProps<"/admin">) {
+const sectionTitles: Record<Section, [string, string]> = {
+  inbox: ["Inbox", "Everything waiting on a staff decision."],
+  calendar: ["Calendar", "See and manage bookings by day, week or month."],
+  bookings: ["All bookings", "Find any booking, filter by status, or check one day's schedule."],
+};
+
+/** The Inbox, Calendar and All bookings pages: one bookings view, shown by `section`. */
+export function BookingsPage({ searchParams, section }: { searchParams: SearchParams; section: Section }) {
+  const [title, subtitle] = sectionTitles[section];
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:py-10">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
       <Suspense
         fallback={
           <>
-            <Title />
+            <PageHeader title={title} subtitle={subtitle} />
             <div className="mt-8 h-96 animate-pulse rounded-2xl bg-black/5" />
           </>
         }
       >
-        <BookingsView searchParams={searchParams} />
+        <BookingsView searchParams={searchParams} section={section} />
       </Suspense>
     </div>
   );
 }
 
-function Title() {
-  return (
-    <div>
-      <h1 className="text-3xl font-bold tracking-tight">Bookings</h1>
-      <p className="mt-1 text-black/60">View, manage, and create bookings.</p>
-    </div>
-  );
-}
-
-/** Quick filter tabs of the table view. Status tabs list upcoming bookings across all dates. */
-const VIEWS: { key: ViewKey; label: string; match: ((b: Booking) => boolean) | null; alert: boolean }[] = [
-  { key: "schedule", label: "Schedule", match: null, alert: false },
-  { key: "requests", label: "New requests", match: (b) => b.status === "pending", alert: true },
-  { key: "verify", label: "To verify", match: (b) => b.status === "awaiting_payment" && !!b.paymentRef, alert: true },
-  { key: "unpaid", label: "Awaiting payment", match: (b) => b.status === "awaiting_payment" && !b.paymentRef, alert: false },
-  { key: "confirmed", label: "Confirmed", match: (b) => b.status === "confirmed", alert: false },
-  { key: "cancelled", label: "Cancelled", match: (b) => b.status === "cancelled", alert: false },
+/** Quick filter tabs of the table views. Status tabs list upcoming bookings across all dates. */
+const VIEWS: { key: ViewKey; section: Section; label: string; match: ((b: Booking) => boolean) | null; alert: boolean }[] = [
+  { key: "requests", section: "inbox", label: "New requests", match: (b) => b.status === "pending", alert: true },
+  { key: "verify", section: "inbox", label: "To verify", match: (b) => b.status === "awaiting_payment" && !!b.paymentRef, alert: true },
+  { key: "unpaid", section: "inbox", label: "Awaiting payment", match: (b) => b.status === "awaiting_payment" && !b.paymentRef, alert: false },
+  { key: "all", section: "bookings", label: "All", match: (b) => b.status !== "cancelled", alert: false },
+  { key: "schedule", section: "bookings", label: "By day", match: null, alert: false },
+  { key: "confirmed", section: "bookings", label: "Confirmed", match: (b) => b.status === "confirmed", alert: false },
+  { key: "cancelled", section: "bookings", label: "Cancelled", match: (b) => b.status === "cancelled", alert: false },
 ];
 
 const viewHints: Partial<Record<ViewKey, string>> = {
-  requests: "Approve to email the customer the payment QR, or decline. Requests not reviewed in time (see Settings) are declined automatically.",
+  requests: "Approve to email the customer the payment QR, or decline. Requests not reviewed in time (see Payments & alerts) are declined automatically.",
   verify: "The customer says they've paid. Find the reference in your account, then confirm.",
   unpaid: "Approved and emailed, but no payment reference yet. Released automatically once the payment window passes.",
 };
 
-async function BookingsView({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+/** What the "New booking" form needs to know about each activity. */
+export function bookable(activities: Activity[]) {
+  return activities.map((a) => ({
+    slug: a.slug,
+    name: a.name,
+    resourceLabel: a.resourceLabel,
+    resources: a.resources,
+    openHour: a.openHour,
+    closeHour: a.closeHour,
+    maxHoursPerBooking: a.maxHoursPerBooking,
+    maxPlayers: a.maxPlayers,
+    pricePerHour: a.pricePerHour,
+  }));
+}
+
+async function BookingsView({ searchParams, section }: { searchParams: SearchParams; section: Section }) {
   const sp = await searchParams;
   await connection();
   const owner = await requireOwner();
@@ -66,10 +82,11 @@ async function BookingsView({ searchParams }: { searchParams: Promise<Record<str
   await releaseOverdueHolds(owner.id);
   const [activities, all, settings] = await Promise.all([getAllActivities(owner.id), listBookings({ ownerId: owner.id }), readSettings(owner.id)]);
   const activityBySlug = new Map(activities.map((a) => [a.slug, a]));
-  const q = parseQuery(sp, today, (slug) => activityBySlug.has(slug));
+  const q = parseQuery(sp, today, (slug) => activityBySlug.has(slug), section);
   const inActivity = all.filter((b) => !q.activity || b.activitySlug === q.activity);
   const selected = q.booking ? all.find((b) => b.id === q.booking) : undefined;
   const overdue = overdueIds(all.filter((b) => b.status === "awaiting_payment" && b.date >= today), settings.paymentWindowHours);
+  const [title, subtitle] = sectionTitles[section];
 
   function rowProps(b: Booking, showDate: boolean): RowProps {
     return {
@@ -82,24 +99,9 @@ async function BookingsView({ searchParams }: { searchParams: Promise<Record<str
 
   return (
     <>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <Title />
-        <CreateBooking
-          q={q}
-          today={today}
-          activities={activities.map((a) => ({
-            slug: a.slug,
-            name: a.name,
-            resourceLabel: a.resourceLabel,
-            resources: a.resources,
-            openHour: a.openHour,
-            closeHour: a.closeHour,
-            maxHoursPerBooking: a.maxHoursPerBooking,
-            maxPlayers: a.maxPlayers,
-            pricePerHour: a.pricePerHour,
-          }))}
-        />
-      </div>
+      <PageHeader title={title} subtitle={subtitle}>
+        <CreateBooking q={q} today={today} activities={bookable(activities)} />
+      </PageHeader>
       <Toolbar q={q} today={today} activities={activities.map((a) => ({ slug: a.slug, name: a.name }))} />
 
       {q.mode === "table" ? (
@@ -256,7 +258,8 @@ function TableView({
   bookings: Booking[];
   rowProps: (b: Booking, showDate: boolean) => RowProps;
 }) {
-  const view = VIEWS.find((v) => v.key === q.view) ?? VIEWS[0];
+  const tabs = VIEWS.filter((v) => v.section === sectionOf(q));
+  const view = tabs.find((v) => v.key === q.view) ?? tabs[0];
   const listed = q.past ? bookings : bookings.filter((b) => b.date >= today);
   const isSchedule = view.match === null;
   const rows = view.match
@@ -273,7 +276,7 @@ function TableView({
         className="mt-4 flex gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_rgb(0_0_0/0.1)]"
         aria-label="Filter bookings"
       >
-        {VIEWS.map((v) => {
+        {tabs.map((v) => {
           const selected = v.key === view.key;
           const count = v.match ? listed.filter(v.match).length : null;
           return (
@@ -409,12 +412,12 @@ function BookingPanel({ closeHref, ...props }: RowProps & { closeHref: string })
 }
 
 /** Bookings approved longer ago than the payment window. Request-time only (after connection()). */
-function overdueIds(bookings: Booking[], windowHours: number) {
+export function overdueIds(bookings: Booking[], windowHours: number) {
   const cutoff = Date.now() - windowHours * 3600_000;
   return new Set(bookings.filter((b) => b.approvedAt && Date.parse(b.approvedAt) < cutoff).map((b) => b.id));
 }
 
-type RowProps = {
+export type RowProps = {
   b: Booking;
   activity?: Activity;
   /** Status tabs span many days, so they show the date as well as the time. */
@@ -476,7 +479,7 @@ function BookingCard({ b, activity, showDate, overdueHours }: RowProps) {
   );
 }
 
-function Court({ b, activity }: { b: Booking; activity?: Activity }) {
+export function Court({ b, activity }: { b: Booking; activity?: Activity }) {
   const resource = activity?.resources.find((r) => r.id === b.resourceId);
   return (
     <>
@@ -581,7 +584,7 @@ const statusStyles: Record<Booking["status"], [string, string]> = {
   cancelled: ["Cancelled", "bg-black/5 text-black/50"],
 };
 
-function StatusBadge({ status }: { status: Booking["status"] }) {
+export function StatusBadge({ status }: { status: Booking["status"] }) {
   const [label, cls] = statusStyles[status];
   return <span className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${cls}`}>{label}</span>;
 }
