@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { activitiesTag } from "@/lib/activities";
-import { requireOwner, sessionVersion, startSession } from "@/lib/auth";
+import { requireAccountHolder, sessionVersion, startSession } from "@/lib/auth";
 import { heroTag } from "@/lib/banner";
 import { createEmailChangeToken, EMAIL_CHANGE_MINUTES } from "@/lib/email-change";
 import { accountNoticeEmail, emailChangeEmail } from "@/lib/emails";
@@ -33,7 +33,7 @@ import {
 import { facilityNow } from "@/lib/time";
 
 // The signed-in owner's own account: sign-in email, password, and deleting it.
-// Every action starts with requireOwner() and asks for the current password,
+// Every action starts with requireAccountHolder() and asks for the current password,
 // so a session left open on a shared computer can't take over the account.
 
 export type AccountState = { ok: boolean; message: string } | null;
@@ -59,7 +59,7 @@ function notify(mail: Mail) {
 }
 
 export async function changePassword(_prev: AccountState, form: FormData): Promise<AccountState> {
-  const owner = await requireOwner();
+  const owner = await requireAccountHolder();
   const password = String(form.get("password") ?? "");
   if (password.length < MIN_PASSWORD_LENGTH) return { ok: false, message: `Use a new password of at least ${MIN_PASSWORD_LENGTH} characters.` };
   if (password.length > 200) return { ok: false, message: "That password is too long." };
@@ -80,7 +80,7 @@ export async function changePassword(_prev: AccountState, form: FormData): Promi
 }
 
 export async function requestEmailChange(_prev: AccountState, form: FormData): Promise<AccountState> {
-  const owner = await requireOwner();
+  const owner = await requireAccountHolder();
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   if (email.length > 254 || !EMAIL.test(email)) return { ok: false, message: "Enter a valid email." };
   if (email === owner.email) return { ok: false, message: "That's already your sign-in email." };
@@ -98,7 +98,7 @@ export async function requestEmailChange(_prev: AccountState, form: FormData): P
 }
 
 export async function deleteAccount(_prev: AccountState, form: FormData): Promise<AccountState> {
-  const owner = await requireOwner();
+  const owner = await requireAccountHolder();
   if (String(form.get("handle") ?? "").trim().replace(/^@/, "").toLowerCase() !== owner.handle)
     return { ok: false, message: `Type your page name, ${owner.handle}, to confirm.` };
   const wrong = await checkPassword(owner, String(form.get("current") ?? ""));

@@ -3,6 +3,13 @@
 :root {
   --background: #f7f8f4;
   --foreground: #14201a;
+  /* Height of the sticky staff header, which the staff sidebar sticks below. */
+  --staff-header: 4rem;
+}
+
+/* The "viewing as" bar (admin/viewing-as-bar.tsx) adds one 2.5rem line to it on wider screens. */
+:root:has([data-viewing-as]) {
+  --staff-header: 6.5rem;
 }
 
 @theme inline {
