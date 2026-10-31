@@ -32,10 +32,20 @@ export const statusLegend: { status: Block["status"]; label: string }[] = [
   { status: "event", label: "Event" },
 ];
 
-/** Browser-framed mock of the staff day calendar: courts across, hours down. */
+// Phones show the first three courts, which between them have every status, so
+// the mock fits without scrolling sideways.
+const PHONE_COURTS = 3;
+const phoneHidden = (court: number) => (court >= PHONE_COURTS ? "hidden sm:block" : "");
+const calendarCols = "grid-cols-[3rem_repeat(3,1fr)] sm:grid-cols-[3.5rem_repeat(4,1fr)]";
+
+/** Browser-framed mock of the staff day calendar: courts across, hours down. A picture to screen readers. */
 export function CalendarMock() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-black/10 bg-white text-foreground shadow-2xl shadow-emerald-950/20">
+    <div
+      role="img"
+      aria-label="Preview of the staff calendar: one day of bookings across four courts, each coloured by status"
+      className="select-none overflow-hidden rounded-2xl border border-black/10 bg-white text-foreground shadow-2xl shadow-emerald-950/20"
+    >
       <div className="flex items-center gap-2 border-b border-black/5 bg-stone-50 px-4 py-2.5">
         <span className="h-2.5 w-2.5 rounded-full bg-black/15" />
         <span className="h-2.5 w-2.5 rounded-full bg-black/15" />
@@ -59,15 +69,15 @@ export function CalendarMock() {
           </span>
         ))}
       </div>
-      <div className="mt-4 overflow-x-auto px-4 pb-4">
-        <div className="grid min-w-[480px] grid-cols-[3.5rem_repeat(4,1fr)] text-xs">
+      <div className="mt-4 px-4 pb-4">
+        <div className={`grid text-xs ${calendarCols}`}>
           <span />
-          {courts.map((c) => (
-            <span key={c} className="pb-2 text-center font-semibold text-black/60">
+          {courts.map((c, ci) => (
+            <span key={c} className={`pb-2 text-center font-semibold text-black/60 ${phoneHidden(ci)}`}>
               {c}
             </span>
           ))}
-          <div className="col-span-5 grid grid-cols-[3.5rem_repeat(4,1fr)]" style={{ gridTemplateRows: `repeat(${hours.length}, 2.75rem)` }}>
+          <div className={`col-span-4 grid sm:col-span-5 ${calendarCols}`} style={{ gridTemplateRows: `repeat(${hours.length}, 2.75rem)` }}>
             {hours.map((h, i) => (
               <span key={h} className="border-t border-black/5 pr-2 pt-1 text-right text-black/40" style={{ gridRow: i + 1, gridColumn: 1 }}>
                 {h}
@@ -75,13 +85,13 @@ export function CalendarMock() {
             ))}
             {hours.map((h, i) =>
               courts.map((c, ci) => (
-                <span key={`${h}-${c}`} className="border-t border-l border-black/5" style={{ gridRow: i + 1, gridColumn: ci + 2 }} />
+                <span key={`${h}-${c}`} className={`border-t border-l border-black/5 ${phoneHidden(ci)}`} style={{ gridRow: i + 1, gridColumn: ci + 2 }} />
               )),
             )}
             {blocks.map((b) => (
               <span
                 key={`${b.court}-${b.start}`}
-                className={`z-10 m-0.5 overflow-hidden rounded-md border px-1.5 py-1 leading-tight ${blockStyle[b.status]}`}
+                className={`z-10 m-0.5 overflow-hidden rounded-md border px-1.5 py-1 leading-tight ${blockStyle[b.status]} ${phoneHidden(b.court)}`}
                 style={{ gridRow: `${b.start + 1} / span ${b.span}`, gridColumn: b.court + 2 }}
               >
                 <span className="block truncate font-semibold">{b.name}</span>
@@ -95,6 +105,13 @@ export function CalendarMock() {
       </div>
     </div>
   );
+}
+
+export type MockStatus = Block["status"];
+
+/** A booking status as a small pill, in the same colours as the calendar mock. */
+export function StatusChip({ status, label }: { status: MockStatus; label: string }) {
+  return <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${blockStyle[status]}`}>{label}</span>;
 }
 
 export function LegendChips({ dark = false }: { dark?: boolean }) {
@@ -114,7 +131,11 @@ export function LegendChips({ dark = false }: { dark?: boolean }) {
 export function PhoneMock() {
   const slots = ["5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM"];
   return (
-    <div className="mx-auto w-[260px] rounded-[2.5rem] border-[10px] border-emerald-950 bg-emerald-950 shadow-2xl shadow-emerald-950/30">
+    <div
+      role="img"
+      aria-label="Preview of a customer booking on a phone: pick a day and a start time, then request with a downpayment by QR"
+      className="mx-auto w-[260px] select-none rounded-[2.5rem] border-[10px] border-emerald-950 bg-emerald-950 shadow-2xl shadow-emerald-950/30"
+    >
       <div className="overflow-hidden rounded-[1.8rem] bg-[#f7f8f4]">
         <div className="flex justify-between px-5 pt-3 text-[10px] font-semibold text-black/70">
           <span>9:41</span>
@@ -170,7 +191,11 @@ export function PhoneMock() {
 /** The before picture: a booking negotiated over chat with a payment screenshot. */
 export function ChatMock() {
   return (
-    <div className="mx-auto w-full max-w-sm space-y-3 rounded-3xl bg-white p-5 text-sm shadow-xl shadow-black/5">
+    <div
+      role="img"
+      aria-label="A booking over chat: the customer asks for a court, is told to send money by GCash, sends a screenshot and waits for a reply"
+      className="mx-auto w-full max-w-sm select-none space-y-3 rounded-3xl bg-white p-5 text-sm shadow-xl shadow-black/5"
+    >
       <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-sky-500 px-3.5 py-2 text-white">
         Hi! Is Court 4 free Thursday, 8 to 10 AM?
       </p>
