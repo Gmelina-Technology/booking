@@ -23,12 +23,15 @@ Checks (the same ones CI runs on every pull request, in `.github/workflows/ci.ym
 ```bash
 npm run lint
 npx next typegen && npx tsc --noEmit
-npm test        # Vitest: sessions, passwords, reset links, bookings, holds, rate limits
+npm test        # Vitest: sessions, passwords, reset links, bookings, holds, rate limits, fees
 npm run build
 ```
 
 Tests live in `tests/`. Store tests run against the JSON file store in a temp folder, so they
 need no database.
+
+**Branches:** work happens on feature branches, and pull requests go to **`development`**, not
+`main`. `main` only takes merges from `development` when a release is ready.
 
 **Security headers** (Content-Security-Policy, HSTS, X-Frame-Options and others) are set for
 every route in `next.config.ts`. The CSP allows inline scripts because nonces would turn off
@@ -125,6 +128,24 @@ inbox, and in a daily sweep for every business (`/api/cron/release-holds`, sched
 10 booking requests an hour per IP and 5 per customer email per business, and 10 payment-reference
 submissions an hour per IP and 5 per booking.
 
+In the bookings table, the booking reference is the first column. Click it to copy it (cards on
+smaller screens have the same copy button).
+
+## Partner fees
+
+Partners (business owners) pay no monthly fee. Each booking is charged once it's confirmed and its
+time slot has ended: hours booked × the rate, capped per booking (default ₱10 per booked hour, at
+most ₱50 per booking). Cancelled bookings and quiet months cost nothing. The calculation is in
+[`lib/fees.ts`](lib/fees.ts).
+
+- **Platform admins** (accounts whose email is in `PLATFORM_ADMIN_EMAILS`, comma-separated) set the
+  platform rate and per-partner promo rates at `/admin/platform-fees`, with a preview and change
+  history. A new rate starts tomorrow at the earliest, so a fee already charged never changes.
+- **Partners** see their current rate and a monthly statement at `/admin/billing`. Sign-up asks
+  them to agree to the current rate, and older accounts accept the fee terms on that page.
+- **The public `/pricing` page** describes the partnership but never states the fee. Partners only
+  see their exact rate when signing up and on Billing.
+
 ### Payment & email setup
 
 1. Sign in and open **Payments & alerts** (`/admin/settings`). Upload your GCash/Maya **Receive money QR**,
@@ -142,6 +163,7 @@ Every email sent is logged on the booking. A failed send shows in red in the sta
 |-------|--------------|
 | `/` | Platform landing page and the directory of businesses |
 | `/signup` | Create an owner account and booking page |
+| `/pricing` | How the partnership works (no monthly fees), without stating the rate |
 | `/p/@[handle]` | A business's page: its activities and recent events showcase |
 | `/p/@[handle]/activities/[slug]` | Booking flow: date → court → time (1–N consecutive hours) → details |
 | `/bookings/[token]` | Private confirmation page. The URL holds a 32-character random token, so it can't be guessed from the short booking reference. Email and phone are masked. |
@@ -157,6 +179,8 @@ Every email sent is logged on the booking. A failed send shows in red in the sta
 | `/admin/calendar` | Month, week and day calendar of bookings |
 | `/admin/bookings` | All bookings by status, plus the day-by-day schedule |
 | `/admin/settings` | Payments & alerts: downpayment %, payment QR, account details, staff alert email, test email |
+| `/admin/billing` | The partner's fee rate and monthly statement |
+| `/admin/platform-fees` | Platform admins only: platform and promo fee rates |
 | `/admin/activities` | Staff view: add, edit, reorder, hide or delete activities |
 | `/admin/events` | Staff view: past events (with photos) shown on the business page |
 | `/admin/banner` | Page design: the business page banner's template, text, photos, colours and buttons, with a live preview |
@@ -261,8 +285,9 @@ information controller), and the platform processes them for it.
 - **Set `SESSION_SECRET`** on the host (see `.env.example`), and serve the site over HTTPS so the
   session cookie is only sent encrypted.
 - **Sign-up is open to anyone with a real email.** Emails are verified with a one-time code and
-  code requests are rate-limited, but there's no CAPTCHA or platform admin yet.
-  Add those before inviting the public.
+  code requests are rate-limited, but there's no CAPTCHA, and platform admins can only manage fee
+  rates, not accounts. Add those before inviting the public.
+- **Set `PLATFORM_ADMIN_EMAILS`** to the accounts that may change partner fee rates.
 - **Set up SMTP before opening sign-up.** Without it, verification codes can't be sent on Vercel
   and nobody can sign up.
 - **Fill in the legal details and review the wording.** Set `operator`, `privacyEmail` and
