@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { startTransition, useActionState } from "react";
 import { MIN_PASSWORD_LENGTH } from "@/lib/password-rules";
+import { useDialog } from "../dialog";
 import { changePassword, deleteAccount, requestEmailChange, type AccountState } from "./actions";
 
 const input =
@@ -73,11 +74,20 @@ export function ChangePasswordForm() {
 
 export function DeleteAccountForm({ handle }: { handle: string }) {
   const [state, action, pending] = useActionState(deleteAccount, null);
+  const { confirm } = useDialog();
   return (
     <form
       action={action}
-      onSubmit={(e) => {
-        if (!confirm(`Delete @${handle} and all its data for good?`)) e.preventDefault();
+      onSubmit={async (e) => {
+        // Hold the submit until the dialog is answered, then run the action ourselves.
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        const ok = await confirm(`@${handle} and all its data will be deleted for good. This can't be undone.`, {
+          title: "Delete your account?",
+          confirmLabel: "Delete my account",
+          danger: true,
+        });
+        if (ok) startTransition(() => action(data));
       }}
       className="mt-4 grid gap-4 sm:grid-cols-2"
     >

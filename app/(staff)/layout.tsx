@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { logout } from "@/app/(platform)/login/actions";
 import { platform } from "@/lib/facility";
+import { DialogProvider } from "./admin/dialog";
 import NotificationBell from "./admin/notifications";
 
 /** Header for the staff area: the logo, notifications and sign-out. The menu lives in admin/layout.tsx. */
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   return (
-    <>
+    <DialogProvider>
       <header className="sticky top-0 z-20 border-b border-black/5 bg-white/80 backdrop-blur">
         <div className="flex h-16 items-center justify-between px-4 md:px-5">
           <Link href="/" className="flex items-center gap-2 whitespace-nowrap text-lg font-bold tracking-tight">
@@ -24,6 +25,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         </div>
       </header>
       <main className="flex-1">{children}</main>
-    </>
+    </DialogProvider>
   );
 }
