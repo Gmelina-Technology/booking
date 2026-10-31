@@ -70,10 +70,25 @@ export type Owner = {
   feeTermsAcceptedAt?: string;
 };
 
+/** What a staff notification is about (lib/notifications.ts). */
+export type NotificationKind = "new_request" | "payment_submitted" | "hold_released";
+
+/** One entry in the staff notification bell. */
+export type AppNotification = {
+  id: string;
+  kind: NotificationKind;
+  bookingId: string;
+  title: string;
+  body: string;
+  at: string;
+  /** When staff read it. Missing means unread. */
+  readAt?: string;
+};
+
 export type BookingFilter = { ownerId: string; activitySlug?: string; date?: string; status?: BookingStatus };
 
 /** The small JSON documents each owner has alongside their bookings. */
-export type DocKind = "activities" | "events" | "settings" | "hero";
+export type DocKind = "activities" | "events" | "settings" | "hero" | "notifications";
 
 /** Documents shared by the whole platform rather than one owner. */
 export type PlatformDocKind = "fees";

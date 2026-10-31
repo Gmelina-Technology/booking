@@ -7,6 +7,7 @@ import { clientIp } from "@/lib/auth";
 import { staffNewBookingEmail } from "@/lib/emails";
 import { releaseOverdueHolds } from "@/lib/holds";
 import { sendMail } from "@/lib/mailer";
+import { notify } from "@/lib/notifications";
 import { getPublicOwnerById } from "@/lib/owners";
 import { overLimit } from "@/lib/rate-limit";
 import { siteUrl } from "@/lib/site-url";
@@ -112,7 +113,8 @@ export async function createBooking(input: {
   });
   if (!booking) return { ok: false, error: "Sorry — someone just booked that slot. Please pick another time." };
 
-  // Alert staff without making the customer wait for the email.
+  // Alert staff without making the customer wait for the notification or email.
+  after(() => notify("new_request", booking));
   const { staffNotifyEmail } = await readSettings(owner.id);
   if (staffNotifyEmail) {
     const base = await siteUrl();
@@ -143,10 +145,11 @@ export async function submitPaymentReference(token: string, reference: string): 
   if (!booking) return { ok: false, error: "Booking not found." };
   if (await overLimit(`payref-booking:${booking.id}`, MAX_REFERENCES_PER_BOOKING, HOUR_MS)) return tooMany;
   if (booking.status !== "awaiting_payment") return { ok: false, error: "This booking isn't waiting for a payment." };
-  await updateBooking(booking.ownerId, booking.id, (b) => {
+  const updated = await updateBooking(booking.ownerId, booking.id, (b) => {
     b.paymentRef = ref;
     b.paymentSubmittedAt = new Date().toISOString();
   });
+  if (updated) after(() => notify("payment_submitted", updated));
   refresh();
   return { ok: true };
 }
