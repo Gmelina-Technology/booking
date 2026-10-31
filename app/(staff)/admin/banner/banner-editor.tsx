@@ -16,6 +16,7 @@ import {
   type HeroTemplate,
 } from "@/lib/hero";
 import { resizeImage } from "@/lib/resize-image";
+import { useDialog } from "../dialog";
 import { deleteBannerPhoto, saveBanner, uploadBannerPhoto } from "./actions";
 
 export default function BannerEditor({
@@ -36,6 +37,7 @@ export default function BannerEditor({
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [saving, startSaving] = useTransition();
   const [uploading, setUploading] = useState(false);
+  const { confirm } = useDialog();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
@@ -86,7 +88,7 @@ export default function BannerEditor({
   }
 
   async function remove(name: string) {
-    if (!confirm("Delete this photo? It's removed from your banner too.")) return;
+    if (!(await confirm("It's removed from your banner too.", { title: "Delete this photo?", confirmLabel: "Delete", danger: true }))) return;
     await deleteBannerPhoto(name);
     setLibrary((l) => l.filter((n) => n !== name));
     setS((prev) => ({ ...prev, images: prev.images.filter((n) => n !== name) }));
@@ -128,7 +130,7 @@ export default function BannerEditor({
 
         <Panel title="Text position">
           <div className="flex items-start gap-4">
-            <div className="grid grid-cols-3 gap-1 rounded-xl bg-black/5 p-1.5" role="group" aria-label="Text position">
+            <div className="grid shrink-0 grid-cols-3 gap-1 rounded-xl bg-black/5 p-1.5" role="group" aria-label="Text position">
               {(["top", "center", "bottom"] as HeroAlignY[]).map((y) =>
                 (["left", "center", "right"] as HeroAlignX[]).map((x) => {
                   const allowed = template.positions.x.includes(x) && template.positions.y.includes(y);

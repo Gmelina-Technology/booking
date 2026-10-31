@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useTransition } from "react";
+import { useDialog } from "../dialog";
 import { removeActivity, reorderActivity, setActivityActive } from "./actions";
 
 export function ActivityRowActions({
@@ -20,6 +21,7 @@ export function ActivityRowActions({
   canDelete: boolean;
 }) {
   const [pending, start] = useTransition();
+  const { alert, confirm } = useDialog();
   const btn =
     "rounded-lg border border-black/10 bg-white px-3 py-1.5 text-xs font-medium hover:border-emerald-600 disabled:opacity-30 disabled:hover:border-black/10";
 
@@ -41,11 +43,11 @@ export function ActivityRowActions({
         className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent"
         disabled={pending || !canDelete}
         title={canDelete ? undefined : "Has bookings — hide it instead"}
-        onClick={() => {
-          if (!confirm(`Delete ${name}? This can't be undone.`)) return;
+        onClick={async () => {
+          if (!(await confirm(`${name} will be removed for good. This can't be undone.`, { title: `Delete ${name}?`, confirmLabel: "Delete", danger: true }))) return;
           start(async () => {
             const result = await removeActivity(slug);
-            if (!result.ok) alert(result.error);
+            if (!result.ok) await alert(result.error ?? "Please try again.", { title: "Couldn't delete" });
           });
         }}
       >
