@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { isPlatformAdmin, requireOwner } from "@/lib/auth";
+import { currentAccount, isPlatformAdmin } from "@/lib/auth";
 
 export const metadata = { title: "Platform admin" };
 
@@ -21,10 +21,12 @@ export default function PlatformAdminPage({ searchParams }: PageProps<"/admin">)
 async function Entry({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
   await connection();
-  const owner = await requireOwner();
+  // The signed-in account, not the partner an admin may be viewing as.
+  const account = await currentAccount();
+  if (!account) redirect("/login");
 
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(sp)) for (const v of [value ?? []].flat()) query.append(key, v);
-  if (isPlatformAdmin(owner) && !query.size) redirect("/admin/fees");
+  if (isPlatformAdmin(account) && !query.size) redirect("/admin/partners");
   return redirect(query.size ? `/app?${query}` : "/app");
 }

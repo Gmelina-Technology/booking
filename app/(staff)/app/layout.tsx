@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { currentOwner, isPlatformAdmin } from "@/lib/auth";
+import { currentAccount, currentOwner, isPlatformAdmin } from "@/lib/auth";
 import { ownerPath } from "@/lib/owners";
 import { listBookings } from "@/lib/store";
 import { facilityNow } from "@/lib/time";
@@ -31,14 +31,14 @@ export default function PartnerLayout({ children }: LayoutProps<"/app">) {
 /** The menu, with the count of bookings that need a staff decision on the Inbox link. */
 async function Nav({ top }: { top: React.ReactNode }) {
   await connection();
-  const owner = await currentOwner();
+  const [owner, account] = await Promise.all([currentOwner(), currentAccount()]);
   let inboxCount = 0;
   if (owner) {
     const today = facilityNow().date;
     const upcoming = (await listBookings({ ownerId: owner.id })).filter((b) => b.date >= today);
     inboxCount = upcoming.filter((b) => b.status === "pending" || (b.status === "awaiting_payment" && b.paymentRef)).length;
   }
-  return <StaffNav area="app" inboxCount={inboxCount} top={top} platformAdmin={!!owner && isPlatformAdmin(owner)} />;
+  return <StaffNav area="app" inboxCount={inboxCount} top={top} platformAdmin={!!account && isPlatformAdmin(account)} />;
 }
 
 /** Who is signed in, with a link to their public page. */

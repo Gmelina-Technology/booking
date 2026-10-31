@@ -2,7 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
-import { requireOwner } from "@/lib/auth";
+import { currentViewingAs, requireOwner } from "@/lib/auth";
 import { formatHourRange, formatMoney } from "@/lib/facility";
 import { describeRate } from "@/lib/fee-text";
 import { monthlyStatement, resolveRate } from "@/lib/fees";
@@ -31,7 +31,7 @@ function monthLabel(month: string) {
 async function Billing({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
   await connection();
-  const owner = await requireOwner();
+  const [owner, viewing] = await Promise.all([requireOwner(), currentViewingAs()]);
   const now = facilityNow();
   const thisMonth = now.date.slice(0, 7);
   const month = typeof sp.month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month) && sp.month <= thisMonth ? sp.month : thisMonth;
@@ -65,6 +65,11 @@ async function Billing({ searchParams }: { searchParams: Promise<Record<string, 
                 You agreed to per-booking fees on {new Date(owner.feeTermsAcceptedAt).toLocaleDateString("en-PH", { dateStyle: "medium" })}. If your rate
                 changes, it only applies to bookings after the change.
               </p>
+            </>
+          ) : viewing ? (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-widest text-black/40">Agreement</p>
+              <p className="mt-1 text-sm text-black/70">Not agreed yet. Only the partner can agree to the fee terms, signed in as themselves.</p>
             </>
           ) : (
             <AcceptFeeTerms rate={describeRate(rate)} />

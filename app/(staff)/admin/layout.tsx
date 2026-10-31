@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { currentOwner, isPlatformAdmin } from "@/lib/auth";
+import { currentAccount, isPlatformAdmin } from "@/lib/auth";
 import StaffNav from "../nav";
 
 export const metadata: Metadata = {
@@ -21,11 +21,11 @@ export default function PlatformAdminLayout({ children }: LayoutProps<"/admin">)
   );
 }
 
-/** The platform menu, for platform admins only. */
+/** The platform menu, for platform admins only. Checks the signed-in account, so it stays while viewing as a partner. */
 async function Nav() {
   await connection();
-  const owner = await currentOwner();
-  if (!owner || !isPlatformAdmin(owner)) return null;
+  const account = await currentAccount();
+  if (!account || !isPlatformAdmin(account)) return null;
   const top = <span className="px-1 text-xs font-semibold uppercase tracking-widest text-black/40">Platform admin</span>;
   return <StaffNav area="admin" inboxCount={0} top={top} />;
 }

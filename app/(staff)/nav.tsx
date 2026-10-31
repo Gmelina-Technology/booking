@@ -20,6 +20,7 @@ const icons = {
   shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
   receipt: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6",
   sliders: "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4",
+  users: "M9 11a4 4 0 100-8 4 4 0 000 8zM2 21v-1a6 6 0 0112 0v1M16 3.5a4 4 0 010 7.5M18 14a6 6 0 014 6v1",
 };
 
 type Group = { label: string | null; items: Item[] };
@@ -64,7 +65,13 @@ const platformLink: Group = { label: "Platform", items: [{ href: "/admin", label
 
 /** The platform admin area at /admin (PLATFORM_ADMIN_EMAILS only). */
 const adminGroups: Group[] = [
-  { label: "Platform", items: [{ href: "/admin/fees", label: "Partner fees", icon: icons.sliders }] },
+  {
+    label: "Platform",
+    items: [
+      { href: "/admin/partners", label: "Partners", icon: icons.users },
+      { href: "/admin/fees", label: "Partner fees", icon: icons.sliders },
+    ],
+  },
   { label: "Your business", items: [{ href: "/app", label: "Back to dashboard", icon: icons.home }] },
 ];
 
@@ -97,7 +104,7 @@ export function Sidebar({ area, pathname, inboxCount, top, platformAdmin }: Side
   const current = shown.flatMap((g) => g.items).find((i) => isActive(i.href, pathname));
 
   return (
-    <aside className="border-b border-black/5 bg-white md:sticky md:top-16 md:h-[calc(100vh-4rem)] md:w-60 md:shrink-0 md:overflow-y-auto md:border-b-0 md:border-r">
+    <aside className="border-b border-black/5 bg-white md:sticky md:top-(--staff-header) md:h-[calc(100vh-var(--staff-header))] md:w-60 md:shrink-0 md:overflow-y-auto md:border-b-0 md:border-r">
       <div className="flex min-h-full flex-col gap-4 p-3 md:p-4">
         <div className="flex items-center justify-between gap-3">
           {top}

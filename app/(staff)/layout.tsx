@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { logout } from "@/app/(platform)/login/actions";
 import { platform } from "@/lib/facility";
 import { DialogProvider } from "./dialog";
 import NotificationBell from "./app/notifications";
+import ViewingAsBar from "./viewing-as-bar";
 
 /** Header for the staff area: the logo, notifications and sign-out. Each area's menu lives in its own layout (app/layout.tsx, admin/layout.tsx). */
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
@@ -23,6 +25,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             </form>
           </div>
         </div>
+        <Suspense>
+          <ViewingAsBar />
+        </Suspense>
       </header>
       <main className="flex-1">{children}</main>
     </DialogProvider>

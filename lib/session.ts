@@ -60,3 +60,40 @@ export async function verifySessionToken(token: string | undefined, now = Date.n
   const ok = await crypto.subtle.verify("HMAC", await hmacKey(s), sigBytes, encoder.encode(`${ownerId}.${version}.${exp}`));
   return ok ? { ownerId, version: Number(version) } : null;
 }
+
+// "View as partner" tokens let a platform admin use the staff area as one
+// partner. They sit in their own cookie next to the admin's session, so
+// stopping simply deletes it and the admin is themselves again.
+//
+// Token format: "<admin id>.<admin session version>.<partner id>.<expiry unix seconds>.<signature>".
+// The signature covers "view-as." plus the rest, so it can never pass as a session token.
+// lib/auth.ts only honours it alongside the same admin's current session.
+
+export const VIEW_AS_COOKIE = "view_as";
+export const VIEW_AS_MINUTES = 60;
+
+export type ViewAs = { adminId: string; adminVersion: number; ownerId: string; expires: Date };
+
+export async function createViewAsToken(admin: Session, ownerId: string, now = Date.now()): Promise<{ token: string; expires: Date }> {
+  const s = secret();
+  if (!s) throw new Error("SESSION_SECRET is not set");
+  if (!/^[a-f0-9]+$/.test(admin.ownerId) || !/^[a-f0-9]+$/.test(ownerId)) throw new Error("Invalid owner id");
+  if (!Number.isInteger(admin.version) || admin.version < 0) throw new Error("Invalid session version");
+  const exp = Math.floor(now / 1000) + VIEW_AS_MINUTES * 60;
+  const payload = `${admin.ownerId}.${admin.version}.${ownerId}.${exp}`;
+  const sig = await crypto.subtle.sign("HMAC", await hmacKey(s), encoder.encode(`view-as.${payload}`));
+  return { token: `${payload}.${toBase64Url(sig)}`, expires: new Date(exp * 1000) };
+}
+
+/** Returns who is viewing as whom, or null if the token is missing, forged or expired. */
+export async function verifyViewAsToken(token: string | undefined, now = Date.now()): Promise<ViewAs | null> {
+  const s = secret();
+  if (!s || !token) return null;
+  const [adminId, version, ownerId, exp, sig, ...rest] = token.split(".");
+  if (rest.length || !/^[a-f0-9]+$/.test(adminId ?? "") || !/^\d+$/.test(version ?? "") || !/^[a-f0-9]+$/.test(ownerId ?? "") || !/^\d+$/.test(exp ?? "") || !sig)
+    return null;
+  if (Number(exp) * 1000 <= now) return null;
+  const sigBytes = Uint8Array.from(Buffer.from(sig, "base64url"));
+  const ok = await crypto.subtle.verify("HMAC", await hmacKey(s), sigBytes, encoder.encode(`view-as.${adminId}.${version}.${ownerId}.${exp}`));
+  return ok ? { adminId, adminVersion: Number(version), ownerId, expires: new Date(Number(exp) * 1000) } : null;
+}
