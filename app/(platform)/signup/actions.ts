@@ -161,7 +161,7 @@ async function verifyCode(prev: SignupState, raw: string): Promise<SignupState> 
 
   updateTag(OWNERS_TAG);
   await startSession(owner!);
-  redirect("/admin/business?welcome=1");
+  redirect("/app/business?welcome=1");
 }
 
 async function resendCode(prev: SignupState): Promise<SignupState> {

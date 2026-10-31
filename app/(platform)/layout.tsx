@@ -31,7 +31,7 @@ function NavLinks({ signedIn, hasVenues }: { signedIn: boolean; hasVenues: boole
           {l.label}
         </Link>
       ))}
-      <Link href={signedIn ? "/admin" : "/signup"} className={primaryButton}>
+      <Link href={signedIn ? "/app" : "/signup"} className={primaryButton}>
         {signedIn ? (
           "Dashboard"
         ) : (

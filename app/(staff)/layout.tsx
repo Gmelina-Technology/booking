@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { logout } from "@/app/(platform)/login/actions";
 import { platform } from "@/lib/facility";
-import { DialogProvider } from "./admin/dialog";
-import NotificationBell from "./admin/notifications";
+import { DialogProvider } from "./dialog";
+import NotificationBell from "./app/notifications";
 
-/** Header for the staff area: the logo, notifications and sign-out. The menu lives in admin/layout.tsx. */
+/** Header for the staff area: the logo, notifications and sign-out. Each area's menu lives in its own layout (app/layout.tsx, admin/layout.tsx). */
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   return (
     <DialogProvider>

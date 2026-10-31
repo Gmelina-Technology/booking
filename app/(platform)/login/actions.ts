@@ -15,7 +15,7 @@ const LOCKOUT_MS = 15 * 60 * 1000;
 
 /** Only redirect back to staff pages, never to another site. */
 function safeNext(next: unknown) {
-  return typeof next === "string" && /^\/admin(\/|\?|$)/.test(next) ? next : "/admin";
+  return typeof next === "string" && /^\/(app|admin)(\/|\?|$)/.test(next) ? next : "/app";
 }
 
 export async function login(_prev: string | null, form: FormData): Promise<string | null> {

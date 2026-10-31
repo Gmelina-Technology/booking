@@ -1,4 +1,4 @@
-// How an owner's page banner looks. Edited at /admin/banner, rendered by
+// How an owner's page banner looks. Edited at /app/banner, rendered by
 // app/p/[handle]/hero-view.tsx. Pure data and helpers: safe in client components.
 
 export type HeroTemplate = "collage" | "spotlight" | "split" | "minimal";

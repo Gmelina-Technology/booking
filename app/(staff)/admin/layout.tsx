@@ -1,67 +1,31 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { currentOwner, isPlatformAdmin } from "@/lib/auth";
-import { ownerPath } from "@/lib/owners";
-import { listBookings } from "@/lib/store";
-import { facilityNow } from "@/lib/time";
-import AdminNav, { Sidebar } from "./nav";
+import StaffNav from "../nav";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function AdminLayout({ children }: LayoutProps<"/admin">) {
-  const top = (
-    <Suspense fallback={<span className="px-1 text-xs font-semibold uppercase tracking-widest text-black/40">Staff</span>}>
-      <OwnerBadge />
-    </Suspense>
-  );
+/** The platform admin area. Each page and action also calls requirePlatformAdmin(). */
+export default function PlatformAdminLayout({ children }: LayoutProps<"/admin">) {
   return (
     <div className="w-full md:flex">
-      <Suspense fallback={<Sidebar pathname={null} inboxCount={0} top={top} />}>
-        <Nav top={top} />
+      {/* Holds the sidebar's width until the menu streams in; the menu isn't in the static shell, so it isn't advertised. */}
+      <Suspense fallback={<div className="hidden md:block md:w-60 md:shrink-0" />}>
+        <Nav />
       </Suspense>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
 
-/** The menu, with the count of bookings that need a staff decision on the Inbox link. */
-async function Nav({ top }: { top: React.ReactNode }) {
+/** The platform menu, for platform admins only. */
+async function Nav() {
   await connection();
   const owner = await currentOwner();
-  let inboxCount = 0;
-  if (owner) {
-    const today = facilityNow().date;
-    const upcoming = (await listBookings({ ownerId: owner.id })).filter((b) => b.date >= today);
-    inboxCount = upcoming.filter((b) => b.status === "pending" || (b.status === "awaiting_payment" && b.paymentRef)).length;
-  }
-  return <AdminNav inboxCount={inboxCount} top={top} platformAdmin={!!owner && isPlatformAdmin(owner)} />;
-}
-
-/** Who is signed in, with a link to their public page. */
-async function OwnerBadge() {
-  await connection();
-  const owner = await currentOwner();
-  if (!owner) return null;
-  return (
-    <div className="flex min-w-0 items-center gap-2.5 px-1">
-      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-700 text-sm font-bold text-white" aria-hidden>
-        {owner.profile.name.trim()[0]?.toUpperCase() ?? "@"}
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-semibold">{owner.profile.name}</p>
-        <Link
-          href={ownerPath(owner.handle)}
-          target="_blank"
-          className="block truncate text-xs text-black/50 hover:text-emerald-700"
-          title="Open your public booking page"
-        >
-          @{owner.handle} · View page ↗
-        </Link>
-      </div>
-    </div>
-  );
+  if (!owner || !isPlatformAdmin(owner)) return null;
+  const top = <span className="px-1 text-xs font-semibold uppercase tracking-widest text-black/40">Platform admin</span>;
+  return <StaffNav area="admin" inboxCount={0} top={top} />;
 }

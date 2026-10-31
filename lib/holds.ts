@@ -21,7 +21,7 @@ import { facilityNow } from "./time";
 //
 // This runs wherever it matters, so a slot frees up the moment someone needs it:
 //   - when customers view or book a day (app/actions.ts), for that day
-//   - when staff open the overview or a bookings page (admin/page.tsx, admin/bookings-view.tsx), for the whole business
+//   - when staff open the overview or a bookings page (app/page.tsx, app/bookings-view.tsx), for the whole business
 //   - once a day for every business (app/api/cron/release-holds, vercel.json)
 
 export const UNPAID_REASON = "The payment window passed without a payment.";
