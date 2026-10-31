@@ -8,7 +8,7 @@ import { releaseOverdueHolds } from "@/lib/holds";
 import { holdsSlot, listBookings, readSettings, type Booking } from "@/lib/store";
 import { addDays, addMonths, endOfMonth, facilityNow, formatDate, isoWeek, startOfMonth, startOfWeek } from "@/lib/time";
 import { DayStrip, DayTimeline, Legend, MonthGrid, WeekGrid, hourRange, type Column } from "./calendar";
-import { BookingActions, DayPicker, EraseCustomerButton, ModeSelect, Toolbar } from "./controls";
+import { BookingActions, CopyReference, DayPicker, EraseCustomerButton, ModeSelect, Toolbar } from "./controls";
 import { CreateBooking } from "./create-booking";
 import { PageHeader } from "./page-header";
 import { adminHref, parseQuery, sectionOf, type AdminQuery, type Section, type ViewKey } from "./query";
@@ -342,7 +342,8 @@ function TableView({
             <table className="hidden w-full text-left text-sm lg:table">
               <thead className="border-b border-black/5 text-xs uppercase tracking-wide text-black/50">
                 <tr>
-                  <th className="py-3 pl-4 pr-3 font-medium">{isSchedule ? "Time" : "When"}</th>
+                  <th className="py-3 pl-3 pr-2 font-medium">Reference</th>
+                  <th className="px-3 py-3 font-medium">{isSchedule ? "Time" : "When"}</th>
                   <th className="px-3 py-3 font-medium">Activity</th>
                   <th className="px-3 py-3 font-medium">Customer</th>
                   <th className="px-3 py-3 font-medium">Status</th>
@@ -429,7 +430,10 @@ export type RowProps = {
 function BookingRow({ b, activity, showDate, overdueHours }: RowProps) {
   return (
     <tr className={`align-top ${b.status === "cancelled" ? "text-black/40" : ""}`}>
-      <td className="whitespace-nowrap py-3 pl-4 pr-3 font-medium">
+      <td className="py-2.5 pl-3 pr-2">
+        <CopyReference id={b.id} />
+      </td>
+      <td className="whitespace-nowrap px-3 py-3 font-medium">
         {showDate && <p>{formatDate(b.date)}</p>}
         <p className={showDate ? "text-xs font-normal text-black/60" : ""}>{formatHourRange(b.startHour, b.hours)}</p>
       </td>
@@ -441,7 +445,7 @@ function BookingRow({ b, activity, showDate, overdueHours }: RowProps) {
         <Customer b={b} />
       </td>
       <td className="px-3 py-3">
-        <Status b={b} />
+        <StatusBadge status={b.status} />
       </td>
       <td className="px-3 py-3">
         <Payment b={b} overdueHours={overdueHours} />
@@ -527,9 +531,7 @@ function Status({ b, className = "items-start" }: { b: Booking; className?: stri
   return (
     <div className={`flex shrink-0 flex-col gap-1 ${className}`}>
       <StatusBadge status={b.status} />
-      <span className="font-mono text-[11px] text-black/50" title="Booking reference">
-        {b.id}
-      </span>
+      <CopyReference id={b.id} />
     </div>
   );
 }
