@@ -2,28 +2,45 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { currentOwnerId } from "@/lib/auth";
 import { platform } from "@/lib/facility";
+import { getPublicOwners } from "@/lib/owners";
+import MobileMenu from "./mobile-menu";
 
 const primaryButton = "ml-1 whitespace-nowrap rounded-lg bg-emerald-700 px-4 py-2 text-white hover:bg-emerald-800";
+const desktopLink = "hidden whitespace-nowrap rounded-lg px-3 py-2 hover:bg-black/5 sm:block";
 
-/** "Dashboard" for a signed-in owner, otherwise sign-in and sign-up links. */
-async function AccountLinks() {
-  if (!(await currentOwnerId())) return <SignedOutLinks />;
-  return (
-    <Link href="/admin" className={primaryButton}>
-      Dashboard
-    </Link>
-  );
+/** Reads who is signed in and whether any venue is listed yet, then draws the header links. */
+async function Nav() {
+  const [ownerId, owners] = await Promise.all([currentOwnerId(), getPublicOwners()]);
+  return <NavLinks signedIn={!!ownerId} hasVenues={owners.length > 0} />;
 }
 
-function SignedOutLinks() {
+/**
+ * "Dashboard" for a signed-in owner, otherwise sign-in and sign-up links. "Find a venue"
+ * only once there's a venue to find. On phones everything but the main button sits in a menu.
+ */
+function NavLinks({ signedIn, hasVenues }: { signedIn: boolean; hasVenues: boolean }) {
+  const links = [
+    ...(hasVenues ? [{ href: "/#businesses", label: "Find a venue" }] : []),
+    { href: "/pricing", label: "Pricing" },
+    ...(signedIn ? [] : [{ href: "/login", label: "Sign in" }]),
+  ];
   return (
     <>
-      <Link href="/login" className="rounded-lg px-3 py-2 hover:bg-black/5">
-        Sign in
+      {links.map((l) => (
+        <Link key={l.href} href={l.href} className={desktopLink}>
+          {l.label}
+        </Link>
+      ))}
+      <Link href={signedIn ? "/admin" : "/signup"} className={primaryButton}>
+        {signedIn ? (
+          "Dashboard"
+        ) : (
+          <>
+            Create your <span className="hidden sm:inline">booking </span>page
+          </>
+        )}
       </Link>
-      <Link href="/signup" className={primaryButton}>
-        Create your page
-      </Link>
+      <MobileMenu links={links} />
     </>
   );
 }
@@ -39,14 +56,8 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
             {platform.name}
           </Link>
           <nav className="flex items-center gap-1 text-sm font-medium">
-            <Link href="/#businesses" className="hidden rounded-lg px-3 py-2 hover:bg-black/5 sm:block">
-              Find a venue
-            </Link>
-            <Link href="/pricing" className="hidden rounded-lg px-3 py-2 hover:bg-black/5 sm:block">
-              Pricing
-            </Link>
-            <Suspense fallback={<SignedOutLinks />}>
-              <AccountLinks />
+            <Suspense fallback={<NavLinks signedIn={false} hasVenues={false} />}>
+              <Nav />
             </Suspense>
           </nav>
         </div>
@@ -57,13 +68,18 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
           <p>
             <span className="font-semibold text-black">{platform.name}</span> · {platform.tagline}
           </p>
-          <p className="flex gap-4">
+          <p className="flex flex-wrap gap-x-4 gap-y-2">
             <Link href="/pricing" className="hover:text-black hover:underline">
               Pricing
             </Link>
             <Link href="/signup" className="hover:text-black hover:underline">
-              List your facility
+              Create your booking page
             </Link>
+            {platform.supportEmail && (
+              <a href={`mailto:${platform.supportEmail}`} className="hover:text-black hover:underline">
+                Contact
+              </a>
+            )}
             <Link href="/privacy" className="hover:text-black hover:underline">
               Privacy
             </Link>

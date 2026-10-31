@@ -37,7 +37,7 @@ export default function PricingPage() {
             href="/signup"
             className="mt-8 inline-block rounded-xl bg-lime-300 px-6 py-3 font-semibold text-emerald-950 shadow-lg shadow-lime-300/20 hover:bg-lime-200"
           >
-            Become a partner
+            Create your booking page
           </Link>
         </div>
       </section>

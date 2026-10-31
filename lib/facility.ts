@@ -38,8 +38,12 @@ export const platform = {
   operator: "Courtside",
   /** Where people send privacy requests (Data Privacy Act). */
   privacyEmail: "privacy@your-domain.com",
+  /** Where owners can ask questions, linked as "Contact" in the footer. Empty hides the link. */
+  supportEmail: "",
   /** Date the privacy notice and terms last changed, shown on those pages. */
   legalUpdated: "2026-10-29",
+  /** Handle of a business whose page the home page offers as a sample (e.g. a demo account). Empty hides the link. */
+  sampleHandle: "",
 };
 
 /** What a business shows on its page, in emails and in the footer. Edited at /admin/business. */
