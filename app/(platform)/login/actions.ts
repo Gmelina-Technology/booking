@@ -2,9 +2,9 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { clientIp, requireOwner, sessionVersion, startSession } from "@/lib/auth";
+import { clientIp, requireAccountHolder, sessionVersion, startSession } from "@/lib/auth";
 import { verifyPassword } from "@/lib/password";
-import { authConfigured, SESSION_COOKIE } from "@/lib/session";
+import { authConfigured, SESSION_COOKIE, VIEW_AS_COOKIE } from "@/lib/session";
 import { clearLoginFailures, getLoginFailure, getOwnerByEmail, recordLoginFailure, updateOwner } from "@/lib/store";
 
 const MAX_ATTEMPTS = 5;
@@ -42,13 +42,15 @@ export async function login(_prev: string | null, form: FormData): Promise<strin
 
 /** Signs out this browser only. */
 export async function logout() {
-  (await cookies()).delete(SESSION_COOKIE);
+  const jar = await cookies();
+  jar.delete(SESSION_COOKIE);
+  jar.delete(VIEW_AS_COOKIE);
   redirect("/login");
 }
 
 /** Revokes every session for this account, on every device (e.g. after losing a phone). */
 export async function logoutEverywhere() {
-  const owner = await requireOwner();
+  const owner = await requireAccountHolder();
   await updateOwner(owner.id, (o) => {
     o.sessionVersion = sessionVersion(o) + 1;
   });

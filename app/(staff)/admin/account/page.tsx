@@ -1,6 +1,6 @@
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { requireOwner } from "@/lib/auth";
+import { currentViewingAs, requireOwner } from "@/lib/auth";
 import { logoutEverywhere } from "@/app/(platform)/login/actions";
 import { ChangeEmailForm, ChangePasswordForm, DeleteAccountForm } from "./account-forms";
 
@@ -23,7 +23,15 @@ const card = "rounded-2xl border border-black/5 bg-white p-5 shadow-sm";
 async function Account({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { emailChanged, emailTaken } = await searchParams;
   await connection();
-  const owner = await requireOwner();
+  const [owner, viewing] = await Promise.all([requireOwner(), currentViewingAs()]);
+
+  if (viewing)
+    return (
+      <p role="status" className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
+        You&apos;re viewing as <strong>@{owner.handle}</strong>. Their sign-in email ({owner.email}), password, signed-in devices and account
+        deletion can only be changed by them, signed in as themselves.
+      </p>
+    );
 
   return (
     <div className="mt-8 space-y-6">

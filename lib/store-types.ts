@@ -91,7 +91,10 @@ export type BookingFilter = { ownerId: string; activitySlug?: string; date?: str
 export type DocKind = "activities" | "events" | "settings" | "hero" | "notifications";
 
 /** Documents shared by the whole platform rather than one owner. */
-export type PlatformDocKind = "fees";
+export type PlatformDocKind = "fees" | "view-as-log";
+
+/** A platform admin starting or stopping "view as" for a partner, kept for accountability. */
+export type ViewAsLogEntry = { at: string; event: "start" | "stop"; adminEmail: string; ownerId: string; ownerHandle: string };
 
 export type LoginFailure = { count: number; untilMs: number };
 

@@ -10,7 +10,7 @@ import { emptySchedule, type FeeSchedule } from "./fees";
 import { defaultHeroDoc, type HeroDoc } from "./hero";
 import { fileStore } from "./store-file";
 import { databaseUrl, postgresStore } from "./store-postgres";
-import type { AppNotification, Booking, BookingFilter, InsertOwnerResult, Owner, StoreBackend } from "./store-types";
+import type { AppNotification, Booking, BookingFilter, InsertOwnerResult, Owner, StoreBackend, ViewAsLogEntry } from "./store-types";
 
 // The app's only way to read and write data. Picks a backend:
 //   - Postgres when DATABASE_URL / POSTGRES_URL is set (required on Vercel)
@@ -19,7 +19,7 @@ import type { AppNotification, Booking, BookingFilter, InsertOwnerResult, Owner,
 // Everything except accounts and booking-link lookups is scoped to one owner,
 // so one business can never read or change another's data.
 
-export type { Booking, BookingStatus, EmailKind, EmailLogEntry, Owner } from "./store-types";
+export type { Booking, BookingStatus, EmailKind, EmailLogEntry, Owner, ViewAsLogEntry } from "./store-types";
 export { deleteUpload, isUploadName, readUpload, saveUpload, UPLOAD_TYPES } from "./uploads";
 
 function backend(): StoreBackend {
@@ -223,6 +223,22 @@ export function readFeeSchedule(): Promise<FeeSchedule> {
 /** Atomic read-modify-write of the fee rate history. */
 export function updateFeeSchedule<R>(change: (doc: FeeSchedule) => R): Promise<R> {
   return backend().updatePlatformDoc("fees", emptySchedule(), (doc) => ({ doc, result: change(doc) }));
+}
+
+// ---- Platform admins viewing as partners -----------------------------------
+// Newest first, the latest VIEW_AS_LOG_SIZE kept.
+
+const VIEW_AS_LOG_SIZE = 200;
+
+export function readViewAsLog(): Promise<ViewAsLogEntry[]> {
+  return backend().readPlatformDoc<ViewAsLogEntry[]>("view-as-log", []);
+}
+
+export function logViewAs(entry: ViewAsLogEntry): Promise<void> {
+  return backend().updatePlatformDoc<ViewAsLogEntry[], void>("view-as-log", [], (all) => ({
+    doc: [entry, ...all].slice(0, VIEW_AS_LOG_SIZE),
+    result: undefined,
+  }));
 }
 
 // ---- Login rate limiting --------------------------------------------------
