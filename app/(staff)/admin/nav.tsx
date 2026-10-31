@@ -18,6 +18,8 @@ const icons = {
   store: "M4 10v10h16V10M3 10l2-6h14l2 6M9 20v-5h6v5",
   card: "M3 6h18v12H3zM3 10h18M7 15h4",
   shield: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z",
+  receipt: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6",
+  sliders: "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4",
 };
 
 const groups: { label: string | null; items: Item[] }[] = [
@@ -48,10 +50,14 @@ const groups: { label: string | null; items: Item[] }[] = [
     label: "Settings",
     items: [
       { href: "/admin/settings", label: "Payments & alerts", icon: icons.card },
+      { href: "/admin/billing", label: "Billing", icon: icons.receipt },
       { href: "/admin/account", label: "Account & security", icon: icons.shield },
     ],
   },
 ];
+
+/** Only for platform admins (PLATFORM_ADMIN_EMAILS). */
+const platformGroup: { label: string; items: Item[] } = { label: "Platform", items: [{ href: "/admin/platform-fees", label: "Partner fees", icon: icons.sliders }] };
 
 const isActive = (href: string, pathname: string | null) => (href === "/admin" ? pathname === "/admin" : !!pathname?.startsWith(href));
 
@@ -60,6 +66,8 @@ type SidebarProps = {
   inboxCount: number;
   /** Who is signed in, above the menu. */
   top: React.ReactNode;
+  /** Shows the platform admin pages. */
+  platformAdmin?: boolean;
 };
 
 export default function AdminNav(props: SidebarProps) {
@@ -71,9 +79,10 @@ export default function AdminNav(props: SidebarProps) {
  * header on phones. Also rendered without a pathname as the Suspense fallback
  * while the URL streams in.
  */
-export function Sidebar({ pathname, inboxCount, top }: SidebarProps & { pathname: string | null }) {
+export function Sidebar({ pathname, inboxCount, top, platformAdmin }: SidebarProps & { pathname: string | null }) {
   const [open, setOpen] = useState(false);
-  const current = groups.flatMap((g) => g.items).find((i) => isActive(i.href, pathname));
+  const shown = platformAdmin ? [...groups, platformGroup] : groups;
+  const current = shown.flatMap((g) => g.items).find((i) => isActive(i.href, pathname));
 
   return (
     <aside className="border-b border-black/5 bg-white md:sticky md:top-16 md:h-[calc(100vh-4rem)] md:w-60 md:shrink-0 md:overflow-y-auto md:border-b-0 md:border-r">
@@ -96,7 +105,7 @@ export function Sidebar({ pathname, inboxCount, top }: SidebarProps & { pathname
         </div>
 
         <nav id="admin-menu" aria-label="Staff menu" className={`${open ? "flex" : "hidden"} flex-col gap-4 md:flex`}>
-          {groups.map((g) => (
+          {shown.map((g) => (
             <div key={g.label ?? "home"} className="flex flex-col gap-0.5">
               {g.label && <p className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-black/45">{g.label}</p>}
               {g.items.map((item) => {

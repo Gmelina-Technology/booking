@@ -66,12 +66,17 @@ export type Owner = {
   sessionVersion?: number;
   createdAt: string;
   profile: BusinessProfile;
+  /** When the partner agreed to the per-booking fee (lib/fees.ts). Missing on accounts from before fees. */
+  feeTermsAcceptedAt?: string;
 };
 
 export type BookingFilter = { ownerId: string; activitySlug?: string; date?: string; status?: BookingStatus };
 
 /** The small JSON documents each owner has alongside their bookings. */
 export type DocKind = "activities" | "events" | "settings" | "hero";
+
+/** Documents shared by the whole platform rather than one owner. */
+export type PlatformDocKind = "fees";
 
 export type LoginFailure = { count: number; untilMs: number };
 
@@ -102,6 +107,10 @@ export interface StoreBackend {
   readDoc<T>(ownerId: string, kind: DocKind, fallback: T): Promise<T>;
   /** Atomic read-modify-write of a document. */
   updateDoc<T, R>(ownerId: string, kind: DocKind, fallback: T, change: (doc: T) => { doc: T; result: R }): Promise<R>;
+
+  readPlatformDoc<T>(kind: PlatformDocKind, fallback: T): Promise<T>;
+  /** Atomic read-modify-write of a platform document. */
+  updatePlatformDoc<T, R>(kind: PlatformDocKind, fallback: T, change: (doc: T) => { doc: T; result: R }): Promise<R>;
 
   getLoginFailure(ip: string): Promise<LoginFailure | null>;
   /** Counts a failed login and returns the new state. The count resets once the lock expires. */

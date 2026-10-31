@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import type { Booking, DocKind, InsertOwnerResult, LoginFailure, Owner, StoreBackend } from "./store-types";
+import type { Booking, DocKind, PlatformDocKind, InsertOwnerResult, LoginFailure, Owner, StoreBackend } from "./store-types";
 
 // Postgres storage for production (e.g. Neon via the Vercel Marketplace).
 // Enabled when DATABASE_URL (or POSTGRES_URL) is set.
@@ -8,8 +8,8 @@ import type { Booking, DocKind, InsertOwnerResult, LoginFailure, Owner, StoreBac
 // constraint, plus the full object in `data`. The exclusion constraint makes
 // double-booking impossible even with concurrent requests on many instances.
 // Owners are stored the same way. An owner's documents use the key
-// "owners/<id>/<kind>"; a bare "<kind>" key is data from before accounts
-// existed, which the first account adopts.
+// "owners/<id>/<kind>"; platform-wide ones use "platform/<kind>"; a bare
+// "<kind>" key is data from before accounts existed, which the first account adopts.
 //
 // The schema is safe to re-run, and upgrades a database created before
 // accounts existed (adds owner_id and scopes the overlap rule to each owner).
@@ -105,6 +105,24 @@ async function db() {
 }
 
 const docKey = (ownerId: string, kind: DocKind) => `owners/${ownerId}/${kind}`;
+const platformDocKey = (kind: PlatformDocKind) => `platform/${kind}`;
+
+async function readKey<T>(key: string, fallback: T): Promise<T> {
+  const q = await db();
+  const [row] = await q<{ value: T }[]>`SELECT value FROM documents WHERE key = ${key}`;
+  return row ? row.value : fallback;
+}
+
+async function updateKey<T, R>(key: string, fallback: T, change: (doc: T) => { doc: T; result: R }): Promise<R> {
+  const q = await db();
+  return q.begin(async (tx) => {
+    await tx`INSERT INTO documents (key, value) VALUES (${key}, ${tx.json(fallback as postgres.JSONValue)}) ON CONFLICT (key) DO NOTHING`;
+    const [row] = await tx<{ value: T }[]>`SELECT value FROM documents WHERE key = ${key} FOR UPDATE`;
+    const { doc, result } = change(row.value);
+    await tx`UPDATE documents SET value = ${tx.json(doc as postgres.JSONValue)} WHERE key = ${key}`;
+    return result;
+  }) as Promise<R>;
+}
 
 type Row = { data: Booking };
 type OwnerRow = { data: Owner };
@@ -246,22 +264,20 @@ export const postgresStore: StoreBackend = {
     }) as Promise<Booking | null>;
   },
 
-  async readDoc<T>(ownerId: string, kind: DocKind, fallback: T): Promise<T> {
-    const q = await db();
-    const [row] = await q<{ value: T }[]>`SELECT value FROM documents WHERE key = ${docKey(ownerId, kind)}`;
-    return row ? row.value : fallback;
+  readDoc(ownerId, kind, fallback) {
+    return readKey(docKey(ownerId, kind), fallback);
   },
 
-  async updateDoc<T, R>(ownerId: string, kind: DocKind, fallback: T, change: (doc: T) => { doc: T; result: R }): Promise<R> {
-    const q = await db();
-    const key = docKey(ownerId, kind);
-    return q.begin(async (tx) => {
-      await tx`INSERT INTO documents (key, value) VALUES (${key}, ${tx.json(fallback as postgres.JSONValue)}) ON CONFLICT (key) DO NOTHING`;
-      const [row] = await tx<{ value: T }[]>`SELECT value FROM documents WHERE key = ${key} FOR UPDATE`;
-      const { doc, result } = change(row.value);
-      await tx`UPDATE documents SET value = ${tx.json(doc as postgres.JSONValue)} WHERE key = ${key}`;
-      return result;
-    }) as Promise<R>;
+  updateDoc(ownerId, kind, fallback, change) {
+    return updateKey(docKey(ownerId, kind), fallback, change);
+  },
+
+  readPlatformDoc(kind, fallback) {
+    return readKey(platformDocKey(kind), fallback);
+  },
+
+  updatePlatformDoc(kind, fallback, change) {
+    return updateKey(platformDocKey(kind), fallback, change);
   },
 
   async getLoginFailure(ip) {

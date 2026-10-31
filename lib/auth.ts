@@ -1,5 +1,5 @@
 import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { createSessionToken, SESSION_COOKIE, verifySessionToken, type Session } from "./session";
 import { getOwnerById, type Owner } from "./store";
@@ -60,4 +60,17 @@ export async function requireOwner(): Promise<Owner> {
 export async function clientIp(): Promise<string> {
   const h = await headers();
   return h.get("x-forwarded-for")?.split(",")[0].trim() || h.get("x-real-ip") || "local";
+}
+
+/** Accounts listed in PLATFORM_ADMIN_EMAILS (comma-separated) run the platform itself, e.g. partner fee rates. */
+export function isPlatformAdmin(owner: Pick<Owner, "email">): boolean {
+  const emails = (process.env.PLATFORM_ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase());
+  return emails.includes(owner.email);
+}
+
+/** Like requireOwner(), for platform-admin pages and actions. Anyone else gets a 404, so the page isn't advertised. */
+export async function requirePlatformAdmin(): Promise<Owner> {
+  const owner = await requireOwner();
+  if (!isPlatformAdmin(owner)) notFound();
+  return owner;
 }

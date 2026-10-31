@@ -42,6 +42,9 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
             <Link href="/#businesses" className="hidden rounded-lg px-3 py-2 hover:bg-black/5 sm:block">
               Find a venue
             </Link>
+            <Link href="/pricing" className="hidden rounded-lg px-3 py-2 hover:bg-black/5 sm:block">
+              Pricing
+            </Link>
             <Suspense fallback={<SignedOutLinks />}>
               <AccountLinks />
             </Suspense>
@@ -55,6 +58,9 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
             <span className="font-semibold text-black">{platform.name}</span> · {platform.tagline}
           </p>
           <p className="flex gap-4">
+            <Link href="/pricing" className="hover:text-black hover:underline">
+              Pricing
+            </Link>
             <Link href="/signup" className="hover:text-black hover:underline">
               List your facility
             </Link>

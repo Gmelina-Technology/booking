@@ -19,7 +19,8 @@ function suggestHandle(name: string) {
     .replace(/-+$/, "");
 }
 
-export default function SignupForm() {
+/** The partner rate, e.g. "₱10 per booked hour, max ₱50 per booking". Sign-up is the one place outside the dashboard that shows it. */
+export default function SignupForm({ feeRate }: { feeRate: string }) {
   const [state, action, pending] = useActionState<SignupState, FormData>(signup, {
     step: "details",
     error: null,
@@ -93,6 +94,13 @@ export default function SignupForm() {
           className={input}
         />
         <span className="mt-1 block text-xs text-black/50">At least {MIN_PASSWORD_LENGTH} characters.</span>
+      </label>
+      <label className="flex items-start gap-3 rounded-lg bg-emerald-50 px-3 py-3 text-sm">
+        <input name="acceptFees" type="checkbox" required className="mt-0.5 h-4 w-4 accent-emerald-700" />
+        <span>
+          <span className="font-medium">No monthly fees.</span> I agree to pay {feeRate} for each booking that&apos;s confirmed and played.
+          Cancelled bookings and quiet months cost nothing.
+        </span>
       </label>
       {state.error && (
         <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">

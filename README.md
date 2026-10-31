@@ -226,7 +226,7 @@ server) to see the change.
 3. **Add file storage:** Storage → create a **Blob** store and connect it. It sets
    `BLOB_READ_WRITE_TOKEN`. If you create it as private, also set `BLOB_ACCESS=private`.
 4. **Set environment variables** (Settings → Environment Variables, see `.env.example`):
-   `SESSION_SECRET`, `CRON_SECRET`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`,
+   `SESSION_SECRET`, `CRON_SECRET`, `PLATFORM_ADMIN_EMAILS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`,
    `MAIL_FROM`, and `SITE_URL` once you have a custom domain. Without `SITE_URL`, email links use
    Vercel's production domain.
 5. **Deploy.** The build reads the business directory from the database, so connect the database
