@@ -190,6 +190,41 @@ export function EraseCustomerButton({ id }: { id: string }) {
   );
 }
 
+/** A booking reference that copies itself to the clipboard on click. */
+export function CopyReference({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopied(true);
+    } catch {
+      // Clipboard blocked (e.g. insecure context): the text is still selectable.
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copy booking reference"
+      aria-label={`Copy booking reference ${id}`}
+      className="group inline-flex items-center gap-1 whitespace-nowrap rounded px-1 py-0.5 font-mono text-xs text-black/60 hover:bg-black/5 hover:text-black"
+    >
+      {id}
+      <span className={`font-sans text-[10px] ${copied ? "text-emerald-700" : "text-black/30 group-hover:text-black/60"}`} aria-live="polite">
+        {copied ? "Copied" : "⧉"}
+      </span>
+    </button>
+  );
+}
+
 type MenuItem = { label: string; onSelect: () => void; danger?: boolean };
 
 /** "⋯" button with a small dropdown for the less common actions. Closes on outside click or Escape. */
