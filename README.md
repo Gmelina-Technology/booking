@@ -102,6 +102,13 @@ sign up its owner first. `STAFF_PASSWORD` is no longer used, and old staff sessi
 
 The staff bar shows a **"N to review"** badge for new requests and payments to verify.
 
+**In-app notifications** (`lib/notifications.ts`): the bell in the staff header lists new booking
+requests, payment references customers enter, and holds released automatically, with an unread
+count. Clicking one opens that booking. It checks for new ones every 30 seconds while the tab is
+open, and staff can turn on **desktop alerts** from the bell to get a browser notification as well
+(per browser, and only while a staff page is open). The latest 50 are kept per business, in the
+owner's `notifications` document.
+
 **Holds are released automatically** (`lib/holds.ts`). The booking is cancelled, the slot is freed
 and the customer is emailed when:
 

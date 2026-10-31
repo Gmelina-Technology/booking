@@ -10,7 +10,7 @@ import { emptySchedule, type FeeSchedule } from "./fees";
 import { defaultHeroDoc, type HeroDoc } from "./hero";
 import { fileStore } from "./store-file";
 import { databaseUrl, postgresStore } from "./store-postgres";
-import type { Booking, BookingFilter, InsertOwnerResult, Owner, StoreBackend } from "./store-types";
+import type { AppNotification, Booking, BookingFilter, InsertOwnerResult, Owner, StoreBackend } from "./store-types";
 
 // The app's only way to read and write data. Picks a backend:
 //   - Postgres when DATABASE_URL / POSTGRES_URL is set (required on Vercel)
@@ -200,6 +200,18 @@ export function readHero(ownerId: string): Promise<HeroDoc> {
 /** Atomic read-modify-write of the owner's banner settings and photo library. */
 export function updateHero<R>(ownerId: string, change: (doc: HeroDoc) => R): Promise<R> {
   return backend().updateDoc(ownerId, "hero", defaultHeroDoc(), (doc) => ({ doc, result: change(doc) }));
+}
+
+// ---- Staff notifications --------------------------------------------------
+// Newest first. lib/notifications.ts decides what goes in and how many are kept.
+
+export function readNotifications(ownerId: string): Promise<AppNotification[]> {
+  return backend().readDoc<AppNotification[]>(ownerId, "notifications", []);
+}
+
+/** Atomic read-modify-write of the owner's notifications. */
+export function updateNotifications(ownerId: string, change: (all: AppNotification[]) => AppNotification[]): Promise<void> {
+  return backend().updateDoc<AppNotification[], void>(ownerId, "notifications", [], (all) => ({ doc: change(all), result: undefined }));
 }
 
 // ---- Partner fee rates (platform-wide) -------------------------------------

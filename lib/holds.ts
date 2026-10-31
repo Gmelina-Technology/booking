@@ -3,14 +3,15 @@ import { bookingEmailContext, logBookingEmail } from "./booking-mail";
 import { cancelledEmail } from "./emails";
 import type { PaymentSettings } from "./facility";
 import { sendMail } from "./mailer";
+import { notify } from "./notifications";
 import { getPublicOwnerById } from "./owners";
 import { siteUrl } from "./site-url";
 import { listBookings, readSettings, updateBooking, type Booking } from "./store";
 import { facilityNow } from "./time";
 
 // A booking holds its court while it waits on someone. Holds that have waited
-// too long are released: the booking is cancelled, the slot is freed and the
-// customer is emailed.
+// too long are released: the booking is cancelled, the slot is freed, the
+// customer is emailed and staff get an in-app notification.
 //   - Approved but unpaid: once the payment window passes with no payment
 //     reference entered. With a reference, the customer says they've paid, so
 //     staff check and decide; those are never released automatically.
@@ -87,6 +88,7 @@ export async function releaseOverdueHolds(ownerId: string, bookings?: Booking[])
 
   const base = await siteUrl();
   after(async () => {
+    for (const b of cancelled) await notify("hold_released", b);
     const owner = await getPublicOwnerById(ownerId);
     if (!owner) return;
     for (const b of cancelled) {
