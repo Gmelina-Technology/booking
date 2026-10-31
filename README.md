@@ -146,6 +146,24 @@ most ₱50 per booking). Cancelled bookings and quiet months cost nothing. The c
 - **The public `/pricing` page** describes the partnership but never states the fee. Partners only
   see their exact rate when signing up and on Billing.
 
+### Viewing as a partner
+
+Platform admins can open any partner's staff area as that partner, for example to help with
+support: **Partners** (`/admin/partners`) lists every business, and **View as** switches the staff
+area to theirs. An amber bar on every staff page names the partner, says when it ends, and has
+**Stop viewing as**.
+
+- The admin's own session stays as it is. The partner is held in a second signed cookie
+  (`view_as`, `lib/session.ts`) that lasts 60 minutes and only counts alongside the same admin's
+  current session, so it also ends when they sign out, their sessions are revoked, or their email is
+  removed from `PLATFORM_ADMIN_EMAILS`. `currentOwner()` (`lib/auth.ts`) returns the partner while
+  it's on, so every page and action is scoped to them exactly as if they'd signed in.
+- Changes are real: approving a booking emails the customer, as it would for the partner.
+- The account stays the partner's. Changing the sign-in email or password, signing out devices,
+  deleting the account and agreeing to fee terms use `requireAccountHolder()`, which refuses while
+  viewing as.
+- Every start and stop is logged (the latest 200), and the log is shown on the Partners page.
+
 ### Payment & email setup
 
 1. Sign in and open **Payments & alerts** (`/admin/settings`). Upload your GCash/Maya **Receive money QR**,
@@ -181,6 +199,7 @@ Every email sent is logged on the booking. A failed send shows in red in the sta
 | `/admin/settings` | Payments & alerts: downpayment %, payment QR, account details, staff alert email, test email |
 | `/admin/billing` | The partner's fee rate and monthly statement |
 | `/admin/platform-fees` | Platform admins only: platform and promo fee rates |
+| `/admin/partners` | Platform admins only: every partner, **View as** a partner, and the view-as log |
 | `/admin/activities` | Staff view: add, edit, reorder, hide or delete activities |
 | `/admin/events` | Staff view: past events (with photos) shown on the business page |
 | `/admin/banner` | Page design: the business page banner's template, text, photos, colours and buttons, with a live preview |
@@ -285,9 +304,10 @@ information controller), and the platform processes them for it.
 - **Set `SESSION_SECRET`** on the host (see `.env.example`), and serve the site over HTTPS so the
   session cookie is only sent encrypted.
 - **Sign-up is open to anyone with a real email.** Emails are verified with a one-time code and
-  code requests are rate-limited, but there's no CAPTCHA, and platform admins can only manage fee
-  rates, not accounts. Add those before inviting the public.
-- **Set `PLATFORM_ADMIN_EMAILS`** to the accounts that may change partner fee rates.
+  code requests are rate-limited, but there's no CAPTCHA, and platform admins can manage fee rates
+  and view as a partner but can't suspend or remove accounts. Add those before inviting the public.
+- **Set `PLATFORM_ADMIN_EMAILS`** to the accounts that may change partner fee rates and view as any
+  partner.
 - **Set up SMTP before opening sign-up.** Without it, verification codes can't be sent on Vercel
   and nobody can sign up.
 - **Fill in the legal details and review the wording.** Set `operator`, `privacyEmail` and

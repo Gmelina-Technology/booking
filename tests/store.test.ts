@@ -164,3 +164,12 @@ describe("rate limits", () => {
     expect(await rateLimit.overLimit("test:5.6.7.8", 3, HOUR)).toBe(false);
   });
 });
+
+describe("view-as log", () => {
+  it("keeps entries newest first", async () => {
+    const entry = (event: "start" | "stop") => ({ at: new Date().toISOString(), event, adminEmail: "admin@example.test", ownerId: "abc", ownerHandle: "acme" });
+    await store.logViewAs(entry("start"));
+    await store.logViewAs(entry("stop"));
+    expect((await store.readViewAsLog()).map((e) => e.event)).toEqual(["stop", "start"]);
+  });
+});
