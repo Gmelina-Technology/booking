@@ -7,7 +7,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   return (
     <>
       <header className="sticky top-0 z-20 border-b border-black/5 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between px-4">
+        <div className="flex h-16 items-center justify-between px-4 md:px-5">
           <Link href="/" className="flex items-center gap-2 whitespace-nowrap text-lg font-bold tracking-tight">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-700 text-white">{platform.name[0]}</span>
             {platform.name}

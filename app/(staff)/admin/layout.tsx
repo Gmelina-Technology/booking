@@ -19,7 +19,7 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
     </Suspense>
   );
   return (
-    <div className="mx-auto w-full max-w-[90rem] md:flex">
+    <div className="w-full md:flex">
       <Suspense fallback={<Sidebar pathname={null} inboxCount={0} top={top} />}>
         <Nav top={top} />
       </Suspense>
