@@ -10,6 +10,7 @@ import {
   resendPaymentEmail,
   type StaffResult,
 } from "./booking-actions";
+import { useDialog } from "./dialog";
 import { adminHref, type AdminQuery, type Mode } from "./query";
 import { addDays, formatDate } from "@/lib/time";
 
@@ -107,18 +108,31 @@ type Status = "pending" | "awaiting_payment" | "confirmed" | "cancelled";
 export function BookingActions({ id, status }: { id: string; status: Status }) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<StaffResult | null>(null);
+  const { confirm, prompt } = useDialog();
 
   function run(action: () => Promise<StaffResult>) {
     setResult(null);
     start(async () => setResult(await action()));
   }
 
-  function cancel(verb: string) {
-    const reason = prompt(`${verb} booking ${id}? The customer will be emailed and the slot released.
-
-Reason (optional, included in the email):`);
+  async function cancel(verb: string) {
+    const reason = await prompt("The customer will be emailed and the slot released.", {
+      title: `${verb} booking ${id}?`,
+      label: "Reason (optional, included in the email)",
+      confirmLabel: `${verb} booking`,
+      cancelLabel: "Keep booking",
+      danger: true,
+    });
     if (reason === null) return;
     run(() => cancelBooking(id, reason));
+  }
+
+  async function markReceived() {
+    const ok = await confirm("The customer gets a confirmation email.", {
+      title: `Mark the downpayment for ${id} as received?`,
+      confirmLabel: "Mark received",
+    });
+    if (ok) run(() => markDownpaymentReceived(id));
   }
 
   const primary = "rounded-lg bg-emerald-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50";
@@ -139,11 +153,7 @@ Reason (optional, included in the email):`);
         )}
         {status === "awaiting_payment" && (
           <>
-            <button
-              className={primary}
-              disabled={pending}
-              onClick={() => confirm(`Mark the downpayment for ${id} as received? The customer gets a confirmation email.`) && run(() => markDownpaymentReceived(id))}
-            >
+            <button className={primary} disabled={pending} onClick={markReceived}>
               Downpayment received
             </button>
             <MoreMenu
@@ -167,10 +177,15 @@ Reason (optional, included in the email):`);
 export function EraseCustomerButton({ id }: { id: string }) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<StaffResult | null>(null);
+  const { confirm } = useDialog();
 
-  function erase() {
-    if (!confirm(`Erase the customer's name, email, phone, notes and payment reference from ${id}? The booking itself stays. This can't be undone.`))
-      return;
+  async function erase() {
+    const ok = await confirm(`The customer's name, email, phone, notes and payment reference are removed from ${id}. The booking itself stays. This can't be undone.`, {
+      title: "Erase customer details?",
+      confirmLabel: "Erase",
+      danger: true,
+    });
+    if (!ok) return;
     setResult(null);
     start(async () => setResult(await eraseCustomerDetails(id)));
   }

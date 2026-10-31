@@ -16,6 +16,7 @@ import {
   type HeroTemplate,
 } from "@/lib/hero";
 import { resizeImage } from "@/lib/resize-image";
+import { useDialog } from "../dialog";
 import { deleteBannerPhoto, saveBanner, uploadBannerPhoto } from "./actions";
 
 export default function BannerEditor({
@@ -36,6 +37,7 @@ export default function BannerEditor({
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [saving, startSaving] = useTransition();
   const [uploading, setUploading] = useState(false);
+  const { confirm } = useDialog();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
@@ -86,7 +88,7 @@ export default function BannerEditor({
   }
 
   async function remove(name: string) {
-    if (!confirm("Delete this photo? It's removed from your banner too.")) return;
+    if (!(await confirm("It's removed from your banner too.", { title: "Delete this photo?", confirmLabel: "Delete", danger: true }))) return;
     await deleteBannerPhoto(name);
     setLibrary((l) => l.filter((n) => n !== name));
     setS((prev) => ({ ...prev, images: prev.images.filter((n) => n !== name) }));
