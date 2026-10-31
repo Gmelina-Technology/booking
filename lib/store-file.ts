@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Booking, DocKind, LoginFailure, Owner, StoreBackend } from "./store-types";
+import type { Booking, DocKind, PlatformDocKind, LoginFailure, Owner, StoreBackend } from "./store-types";
 
 // JSON files in ./data, for local development with zero setup. Single-process
 // only: writes are serialized in memory, which doesn't work across serverless
@@ -9,6 +9,7 @@ import type { Booking, DocKind, LoginFailure, Owner, StoreBackend } from "./stor
 //   data/owners.json                 every account
 //   data/bookings.json               every booking (each has an ownerId)
 //   data/owners/<id>/<kind>.json     an owner's activities, events and settings
+//   data/platform/<kind>.json        platform-wide documents (partner fee rates)
 //   data/<kind>.json                 data from before accounts existed, moved
 //                                    into the first account when it signs up
 
@@ -16,6 +17,7 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const OWNERS_FILE = path.join(DATA_DIR, "owners.json");
 const BOOKINGS_FILE = path.join(DATA_DIR, "bookings.json");
 const docFile = (ownerId: string, kind: DocKind) => path.join(DATA_DIR, "owners", ownerId, `${kind}.json`);
+const platformDocFile = (kind: PlatformDocKind) => path.join(DATA_DIR, "platform", `${kind}.json`);
 const legacyDocFile = (kind: DocKind) => path.join(DATA_DIR, `${kind}.json`);
 
 async function readJson<T>(file: string, fallback: T): Promise<T> {
@@ -158,6 +160,18 @@ export const fileStore: StoreBackend = {
     return exclusive(async () => {
       const { doc, result } = change(await readJson(docFile(ownerId, kind), fallback));
       await writeJson(docFile(ownerId, kind), doc);
+      return result;
+    });
+  },
+
+  readPlatformDoc(kind, fallback) {
+    return readJson(platformDocFile(kind), fallback);
+  },
+
+  updatePlatformDoc(kind, fallback, change) {
+    return exclusive(async () => {
+      const { doc, result } = change(await readJson(platformDocFile(kind), fallback));
+      await writeJson(platformDocFile(kind), doc);
       return result;
     });
   },

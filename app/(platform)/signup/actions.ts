@@ -86,6 +86,7 @@ async function startSignup(form: FormData): Promise<SignupState> {
   if (!EMAIL.test(email)) return fail("Enter a valid email.");
   if (password.length < MIN_PASSWORD_LENGTH) return fail(`Use a password of at least ${MIN_PASSWORD_LENGTH} characters.`);
   if (password.length > 200) return fail("That password is too long.");
+  if (form.get("acceptFees") !== "on") return fail("Please agree to the partner fee to continue.");
 
   // Checked again when the account is created; this just avoids sending a code for a sign-up that can't succeed.
   if (await getOwnerByHandle(handle)) return fail(`@${handle} is taken. Try another page name.`);
@@ -144,6 +145,8 @@ async function verifyCode(prev: SignupState, raw: string): Promise<SignupState> 
     email: pending.email,
     passwordHash: pending.passwordHash,
     profile: defaultProfile(pending.name, pending.email),
+    // The details step required ticking the fee agreement.
+    feeTermsAcceptedAt: new Date().toISOString(),
   });
   const jar = await cookies();
   jar.delete({ name: PENDING_SIGNUP_COOKIE, path: "/signup" });

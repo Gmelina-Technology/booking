@@ -1,5 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
+import { Suspense } from "react";
+import { describeRate } from "@/lib/fee-text";
+import { resolveRate } from "@/lib/fees";
+import { readFeeSchedule } from "@/lib/store";
+import { facilityNow } from "@/lib/time";
 import SignupForm from "./signup-form";
 
 export const metadata: Metadata = { title: "Create your booking page" };
@@ -12,7 +18,9 @@ export default function SignupPage() {
         <p className="mt-1 text-sm text-black/60">
           You&apos;ll get a public page for customers and a staff inbox for you.
         </p>
-        <SignupForm />
+        <Suspense fallback={<div className="mt-6 h-96 animate-pulse rounded-xl bg-black/5" />}>
+          <Form />
+        </Suspense>
       </div>
       <p className="mt-4 text-center text-sm text-black/60">
         Already have an account?{" "}
@@ -22,4 +30,11 @@ export default function SignupPage() {
       </p>
     </div>
   );
+}
+
+/** New partners see and agree to the current platform rate. */
+async function Form() {
+  await connection();
+  const rate = resolveRate(await readFeeSchedule(), "", facilityNow().date);
+  return <SignupForm feeRate={describeRate(rate)} />;
 }

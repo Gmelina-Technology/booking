@@ -6,6 +6,7 @@ import {
   type PastEvent,
   type PaymentSettings,
 } from "./facility";
+import { emptySchedule, type FeeSchedule } from "./fees";
 import { defaultHeroDoc, type HeroDoc } from "./hero";
 import { fileStore } from "./store-file";
 import { databaseUrl, postgresStore } from "./store-postgres";
@@ -199,6 +200,17 @@ export function readHero(ownerId: string): Promise<HeroDoc> {
 /** Atomic read-modify-write of the owner's banner settings and photo library. */
 export function updateHero<R>(ownerId: string, change: (doc: HeroDoc) => R): Promise<R> {
   return backend().updateDoc(ownerId, "hero", defaultHeroDoc(), (doc) => ({ doc, result: change(doc) }));
+}
+
+// ---- Partner fee rates (platform-wide) -------------------------------------
+
+export function readFeeSchedule(): Promise<FeeSchedule> {
+  return backend().readPlatformDoc("fees", emptySchedule());
+}
+
+/** Atomic read-modify-write of the fee rate history. */
+export function updateFeeSchedule<R>(change: (doc: FeeSchedule) => R): Promise<R> {
+  return backend().updatePlatformDoc("fees", emptySchedule(), (doc) => ({ doc, result: change(doc) }));
 }
 
 // ---- Login rate limiting --------------------------------------------------

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { currentOwner } from "@/lib/auth";
+import { currentOwner, isPlatformAdmin } from "@/lib/auth";
 import { ownerPath } from "@/lib/owners";
 import { listBookings } from "@/lib/store";
 import { facilityNow } from "@/lib/time";
@@ -38,7 +38,7 @@ async function Nav({ top }: { top: React.ReactNode }) {
     const upcoming = (await listBookings({ ownerId: owner.id })).filter((b) => b.date >= today);
     inboxCount = upcoming.filter((b) => b.status === "pending" || (b.status === "awaiting_payment" && b.paymentRef)).length;
   }
-  return <AdminNav inboxCount={inboxCount} top={top} />;
+  return <AdminNav inboxCount={inboxCount} top={top} platformAdmin={!!owner && isPlatformAdmin(owner)} />;
 }
 
 /** Who is signed in, with a link to their public page. */
