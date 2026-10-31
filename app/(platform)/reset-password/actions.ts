@@ -79,5 +79,5 @@ export async function resetPassword(_prev: string | null, form: FormData): Promi
 
   await clearLoginFailures(await clientIp());
   await startSession(updated);
-  redirect("/admin");
+  redirect("/app");
 }

@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { Owner } from "./store";
 
-// Changing the sign-in email. The owner asks from /admin/account (with their
+// Changing the sign-in email. The owner asks from /app/account (with their
 // password); we email a link to the NEW address, so the change only happens
 // once they prove they can read it. The link opens /account/confirm-email/<token>.
 //

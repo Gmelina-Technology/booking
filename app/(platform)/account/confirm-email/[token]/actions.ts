@@ -18,7 +18,7 @@ export async function confirmEmailChange(token: string): Promise<void> {
   const oldEmail = owner.email;
 
   const taken = await getOwnerByEmail(request.newEmail);
-  if (taken && taken.id !== owner.id) redirect("/admin/account?emailTaken=1");
+  if (taken && taken.id !== owner.id) redirect("/app/account?emailTaken=1");
   try {
     await updateOwner(owner.id, (o) => {
       // Re-checked under the lock, so the link can't be used twice at once.
@@ -28,7 +28,7 @@ export async function confirmEmailChange(token: string): Promise<void> {
   } catch (err) {
     if (err instanceof LinkUsed) redirect(`/account/confirm-email/${encodeURIComponent(token)}`);
     // Another account took the address between the check and the update (Postgres unique email).
-    if ((err as { code?: string }).code === "23505") redirect("/admin/account?emailTaken=1");
+    if ((err as { code?: string }).code === "23505") redirect("/app/account?emailTaken=1");
     throw err;
   }
 
@@ -39,5 +39,5 @@ export async function confirmEmailChange(token: string): Promise<void> {
     );
     if (!result.ok) console.error("Email change notice failed:", result.detail);
   });
-  redirect("/admin/account?emailChanged=1");
+  redirect("/app/account?emailChanged=1");
 }
