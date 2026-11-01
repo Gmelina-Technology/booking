@@ -5,6 +5,7 @@ import { formatHour, formatMoney } from "@/lib/facility";
 import { ownerFromParams, ownerPath } from "@/lib/owners";
 import Hero from "./hero";
 import PastEvents from "./past-events";
+import PausedNotice, { pausedNow } from "./paused-notice";
 
 export default function OwnerHome({ params }: PageProps<"/p/[handle]">) {
   return (
@@ -16,16 +17,21 @@ export default function OwnerHome({ params }: PageProps<"/p/[handle]">) {
 
 async function OwnerHomeContent({ params }: { params: Promise<{ handle: string }> }) {
   const owner = await ownerFromParams(params);
-  const activities = await getActiveActivities(owner.id);
+  const [activities, paused] = await Promise.all([getActiveActivities(owner.id), pausedNow(owner)]);
 
   return (
     <>
       <Hero owner={owner} activities={activities} />
 
       <section id="activities" className="mx-auto max-w-6xl scroll-mt-16 px-4 py-12 sm:py-16">
-        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Choose an activity</h2>
+        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{paused ? "Activities" : "Choose an activity"}</h2>
         <p className="mt-2 text-black/60">Prices are per court, per hour.</p>
-        {activities.length === 0 && (
+        {paused && (
+          <div className="mt-6 sm:mt-8">
+            <PausedNotice owner={owner} />
+          </div>
+        )}
+        {activities.length === 0 && !paused && (
           <p className="mt-8 rounded-2xl bg-white p-10 text-center text-black/50">No activities are open for booking right now.</p>
         )}
         {/* Phone: compact rows with the icon on the side. Tablet and up: cards. */}
@@ -52,7 +58,7 @@ async function OwnerHomeContent({ params }: { params: Promise<{ handle: string }
                     {a.resources.length} {a.resourceLabel.toLowerCase()}
                     {a.resources.length > 1 ? "s" : ""} · {formatHour(a.openHour)}–{formatHour(a.closeHour)}
                   </span>
-                  <span className="font-semibold text-emerald-700 group-hover:underline">Book →</span>
+                  <span className="font-semibold text-emerald-700 group-hover:underline">{paused ? "Details →" : "Book →"}</span>
                 </div>
               </div>
             </Link>

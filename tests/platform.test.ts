@@ -151,3 +151,26 @@ describe("suspended partners", () => {
     expect(await owners.getPublicOwner("suspend-me")).toMatchObject({ handle: "suspend-me" });
   });
 });
+
+describe("paused pages", () => {
+  it("stay online with the partner's message but leave the directory", async () => {
+    const owner = await newOwner("pause-me");
+    expect((await owners.getListedOwners()).some((o) => o.id === owner.id)).toBe(true);
+
+    await store.updateOwner(owner.id, (o) => void (o.pause = { at: new Date().toISOString(), message: "Resurfacing", until: "2026-11-10" }));
+    expect(await owners.getPublicOwner("pause-me")).toMatchObject({ pause: { message: "Resurfacing", until: "2026-11-10" } });
+    expect(await owners.getPublicOwnerById(owner.id)).toMatchObject({ pause: { message: "Resurfacing" } });
+    expect((await owners.getListedOwners()).some((o) => o.id === owner.id)).toBe(false);
+
+    await store.updateOwner(owner.id, (o) => void delete o.pause);
+    expect((await owners.getPublicOwner("pause-me"))?.pause).toBeUndefined();
+    expect((await owners.getListedOwners()).some((o) => o.id === owner.id)).toBe(true);
+  });
+
+  it("end by themselves on their reopening date", () => {
+    expect(owners.isPaused(undefined, "2026-11-09")).toBe(false);
+    expect(owners.isPaused({}, "2030-01-01")).toBe(true);
+    expect(owners.isPaused({ until: "2026-11-10" }, "2026-11-09")).toBe(true);
+    expect(owners.isPaused({ until: "2026-11-10" }, "2026-11-10")).toBe(false);
+  });
+});

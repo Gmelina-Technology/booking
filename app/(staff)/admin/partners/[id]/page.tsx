@@ -123,9 +123,17 @@ async function Partner({ params }: { params: Promise<{ id: string }> }) {
           </div>
         ) : (
           <div className="mt-2 space-y-3 text-sm">
-            <p>
-              <strong className="text-emerald-800">Live.</strong> Listed in the directory and taking booking requests.
-            </p>
+            {owner.pause ? (
+              <p>
+                <strong className="text-amber-800">Paused by the partner</strong> {when(owner.pause.at)}
+                {owner.pause.until ? `, until ${formatDate(owner.pause.until, { year: "numeric" })}` : ""}. Their page is online with their
+                message{owner.pause.message ? ` (“${owner.pause.message}”)` : ""} but takes no new requests and is hidden from the directory.
+              </p>
+            ) : (
+              <p>
+                <strong className="text-emerald-800">Live.</strong> Listed in the directory and taking booking requests.
+              </p>
+            )}
             {protectedAccount ? (
               <p className="text-black/50">Platform admin accounts can&apos;t be suspended.</p>
             ) : (
