@@ -39,8 +39,21 @@ body {
   }
 }
 
+/* Toasts (app/toaster.tsx) slide up into place. */
+@theme {
+  --animate-toast-in: toast-in 180ms ease-out;
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-kenburns {
+  .animate-kenburns,
+  .animate-toast-in {
     animation: none;
   }
 }

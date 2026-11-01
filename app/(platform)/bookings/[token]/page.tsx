@@ -5,9 +5,10 @@ import { Suspense } from "react";
 import { getActivity } from "@/lib/activities";
 import { formatHourRange, formatMoney, type PaymentSettings } from "@/lib/facility";
 import { getPublicOwnerById, ownerPath } from "@/lib/owners";
+import CancelForm from "./cancel-form";
 import PaymentReferenceForm from "./payment-reference-form";
 import { getBookingByToken, readSettings, type Booking } from "@/lib/store";
-import { formatDate } from "@/lib/time";
+import { facilityNow, formatDate } from "@/lib/time";
 
 // The URL is the only thing protecting this page, so keep it out of search
 // engines and out of Referer headers sent to other sites.
@@ -48,7 +49,10 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
   const activity = await getActivity(owner.id, booking.activitySlug);
   const resource = activity?.resources.find((r) => r.id === booking.resourceId);
   const settings = await readSettings(owner.id);
-  const [icon, heading, subheading, color] = header(booking, settings);
+  const [icon, heading, subheading, color] = header(booking, settings, !!activity?.noDownpayment);
+  const now = facilityNow();
+  const cancellable = booking.status !== "cancelled" && (booking.date > now.date || (booking.date === now.date && booking.startHour > now.hour));
+  const contact = owner.profile.phone || owner.profile.email;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
@@ -83,7 +87,13 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
           <dt className="text-black/50">Total</dt>
           <dd className="font-semibold">{formatMoney(booking.total)}</dd>
         </div>
-        {booking.downpayment !== undefined && booking.status !== "cancelled" && (
+        {booking.downpayment === 0 && booking.status !== "cancelled" && (
+          <div className="flex justify-between py-4 text-base">
+            <dt className="font-semibold">Pay at the front desk</dt>
+            <dd className="font-bold text-emerald-700">{formatMoney(booking.total)}</dd>
+          </div>
+        )}
+        {!!booking.downpayment && booking.status !== "cancelled" && (
           <>
             <div className="flex justify-between py-3">
               <dt className="text-black/50">Downpayment</dt>
@@ -100,10 +110,11 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
       </dl>
       <div className="space-y-3 border-t border-black/5 bg-black/[0.02] px-6 py-5 text-center text-sm text-black/60">
         <p>
-          Please arrive 10 minutes early.
-          {(owner.profile.phone || owner.profile.email) &&
-            ` Need to change or cancel? Contact ${owner.profile.name} at ${owner.profile.phone || owner.profile.email} with your reference.`}
+          {booking.status !== "cancelled" && "Please arrive 10 minutes early. "}
+          Need to change the time? Contact {owner.profile.name}
+          {contact ? ` at ${contact}` : ""} with your reference <span className="font-mono">{booking.id}</span>.
         </p>
+        {cancellable && <CancelForm token={token} paid={!!booking.paidAt && !!booking.downpayment} />}
         <p className="text-xs text-black/50">
           Bookmark this page to see your booking again. The link is private, so only share it with people in
           your group.
@@ -116,14 +127,16 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
   );
 }
 
-function header(b: Booking, settings: PaymentSettings): [string, string, string, string] {
+function header(b: Booking, settings: PaymentSettings, noDownpayment: boolean): [string, string, string, string] {
   switch (b.status) {
-    case "pending":
-      return ["⏳", "Request received", `We're checking availability. You'll get an email with payment instructions once staff approve your booking. If they can't review it within ${settings.requestWindowHours} hours, the slot is released and we'll email you.`, "bg-blue-600"];
+    case "pending": {
+      const next = noDownpayment ? "a confirmation" : "payment instructions";
+      return ["⏳", "Request received", `We're checking availability. You'll get an email with ${next} once staff approve your booking. If they can't review it within ${settings.requestWindowHours} hours, the slot is released and we'll email you.`, "bg-blue-600"];
+    }
     case "awaiting_payment":
       return ["💳", "Approved: pay to confirm", `Pay the downpayment within ${settings.paymentWindowHours} hours to lock in your slot.`, "bg-amber-600"];
     case "confirmed":
-      return ["✓", "You're booked!", "Your downpayment is received and your slot is confirmed.", "bg-emerald-700"];
+      return ["✓", "You're booked!", b.downpayment === 0 ? "Your slot is confirmed. Pay at the front desk when you arrive." : "Your downpayment is received and your slot is confirmed.", "bg-emerald-700"];
     case "cancelled":
       return ["✕", "Booking cancelled", b.cancelReason ? `Reason: ${b.cancelReason}` : "This booking is no longer active.", "bg-zinc-500"];
   }
@@ -149,7 +162,7 @@ function PayNow({ booking, settings, token }: { booking: Booking; settings: Paym
       <p className="mt-2 text-sm text-black/60">
         Put <span className="font-mono font-semibold text-black">{booking.id}</span> in the payment note.
       </p>
-      <PaymentReferenceForm token={token} submitted={booking.paymentRef ?? null} />
+      <PaymentReferenceForm token={token} submitted={booking.paymentRef ?? null} due={booking.downpayment ?? booking.total} />
     </section>
   );
 }

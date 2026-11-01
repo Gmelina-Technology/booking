@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { requireOwner } from "@/lib/auth";
 import { ownerPath } from "@/lib/owners";
+import { ShareButtons } from "@/app/p/[handle]/share";
 import BusinessForm from "./business-form";
 
 export const metadata = { title: "Staff — business profile" };
@@ -29,15 +30,15 @@ async function Business({ searchParams }: { searchParams: Promise<Record<string,
     <div className="mt-8 space-y-6">
       {welcome && (
         <div className="rounded-2xl border border-lime-300 bg-lime-50 p-5 text-sm">
-          <p className="font-semibold text-emerald-900">Your page is live 🎉</p>
+          <p className="font-semibold text-emerald-900">Your page is ready 🎉</p>
           <p className="mt-1 text-emerald-900/80">
-            Next: add your address and phone below, set your prices and courts in{" "}
-            <Link href="/app/activities" className="font-semibold underline">
-              Activities
-            </Link>
-            , and upload your payment QR in{" "}
+            Customers can request bookings once you&apos;ve added your payment QR or account number in{" "}
             <Link href="/app/settings" className="font-semibold underline">
               Payments &amp; alerts
+            </Link>
+            . Before you share the link: add your address and phone below, so customers can reach you, and check the prices and courts in{" "}
+            <Link href="/app/activities" className="font-semibold underline">
+              Activities
             </Link>
             . We started you off with a few sample activities. Edit or hide the ones you don&apos;t offer.
           </p>
@@ -52,6 +53,29 @@ async function Business({ searchParams }: { searchParams: Promise<Record<string,
           <Link href={path} target="_blank" className="text-sm font-semibold text-emerald-700 hover:underline">
             Open page ↗
           </Link>
+        </div>
+        <div className="mt-5 border-t border-black/5 pt-4">
+          <h3 className="text-sm font-semibold">Share your page</h3>
+          <p className="mt-1 text-sm text-black/60">Post it on your social media pages so customers can book straight from there.</p>
+          <div className="mt-3">
+            <ShareButtons path={path} text={`Book a court at ${owner.profile.name}`} />
+          </div>
+          <p className="mt-4 text-xs font-medium text-black/50">How the link looks when shared</p>
+          {/* eslint-disable-next-line @next/next/no-img-element -- generated preview card, already sized */}
+          <img
+            src={`${path}/opengraph-image`}
+            alt={`Link preview for ${owner.profile.name}`}
+            width={1200}
+            height={630}
+            className="mt-2 w-full max-w-md rounded-xl border border-black/10"
+          />
+          <p className="mt-2 text-xs text-black/50">
+            Uses your banner colours and first banner photo from{" "}
+            <Link href="/app/banner" className="underline hover:text-black">
+              Page design
+            </Link>
+            . Facebook and others keep a copy for a while, so changes can take time to show on links already posted.
+          </p>
         </div>
         <p className="mt-3 text-xs text-black/50">
           Signed in as {owner.email}.{" "}

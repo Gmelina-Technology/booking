@@ -1,4 +1,5 @@
 import type { Activity, PaymentSettings } from "./facility";
+import { isSale, revenueOf } from "./sales";
 import type { Booking, Owner } from "./store-types";
 import { addDays } from "./time";
 
@@ -60,7 +61,7 @@ export function partnerStats(bookings: Booking[], today: string, nowMs = Date.no
     recent: bookings.filter((b) => b.createdAt.slice(0, 10) >= since).length,
     waiting: bookings.filter((b) => waitingSince(b)).length,
     stale: bookings.filter((b) => isStale(b, nowMs)).length,
-    confirmedValue: bookings.reduce((sum, b) => sum + (b.status === "confirmed" ? b.total : 0), 0),
+    confirmedValue: bookings.reduce((sum, b) => sum + (isSale(b) ? revenueOf(b) : 0), 0),
     lastBookingAt,
   };
 }

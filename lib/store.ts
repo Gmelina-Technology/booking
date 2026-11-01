@@ -32,6 +32,7 @@ import type {
 // listPlatformBookings(), is only for platform admin pages.
 
 export type { Booking, BookingStatus, EmailKind, EmailLogEntry, Owner, PartnerLogEntry, PlatformNotification, ViewAsLogEntry } from "./store-types";
+export { SlotTaken } from "./store-types";
 export { deleteUpload, isUploadName, readUpload, saveUpload, UPLOAD_TYPES } from "./uploads";
 
 function backend(): StoreBackend {
@@ -128,6 +129,7 @@ class NotYours extends Error {}
  * Applies `change` to one of the owner's bookings atomically. Returns null if
  * the booking doesn't exist or belongs to someone else. `change` may throw to
  * abort (e.g. when the booking is in the wrong state); nothing is written then.
+ * Throws SlotTaken if a moved booking would overlap another on its court.
  */
 export async function updateBooking(ownerId: string, id: string, change: (b: Booking) => void) {
   try {

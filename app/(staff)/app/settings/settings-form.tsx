@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import type { PaymentSettings } from "@/lib/facility";
+import { platform, type PaymentSettings } from "@/lib/facility";
 import { resizeImage } from "@/lib/resize-image";
+import { toast } from "@/app/toaster";
 import { saveSettings, sendTestEmail } from "./actions";
 
 export default function SettingsForm({ settings, smtp }: { settings: PaymentSettings; smtp: boolean }) {
@@ -10,10 +11,8 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
   const [qr, setQr] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(settings.qrPhoto ? `/uploads/${settings.qrPhoto}` : null);
   const [removeQr, setRemoveQr] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [saving, startSaving] = useTransition();
   const [testTo, setTestTo] = useState(settings.staffNotifyEmail);
-  const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
   const [testing, startTesting] = useTransition();
 
   useEffect(() => {
@@ -23,14 +22,13 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
 
   async function pickQr(file: File | undefined) {
     if (!file) return;
-    setResult(null);
     try {
       const resized = await resizeImage(file, { maxEdge: 1000, type: "image/png" });
       setQr(resized);
       setPreview(URL.createObjectURL(resized));
       setRemoveQr(false);
     } catch (e) {
-      setResult({ ok: false, message: e instanceof Error ? e.message : "Couldn't read that image." });
+      toast.error(e instanceof Error ? e.message : "Couldn't read that image.");
     }
   }
 
@@ -38,10 +36,9 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
     form.delete("qrPicker");
     if (qr) form.set("qr", qr);
     if (removeQr) form.set("removeQr", "1");
-    setResult(null);
     startSaving(async () => {
       const r = await saveSettings(form);
-      setResult(r);
+      toast.result(r);
       if (r.ok) setQr(null);
     });
   }
@@ -61,9 +58,18 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
           </div>
           <p className="text-xs text-black/50">
             If the customer hasn&apos;t entered a payment reference in time, the booking is cancelled automatically, the slot is freed and the
-            customer is emailed. Requests you haven&apos;t approved or declined in time, or by their start time, are declined the same way.
-            Bookings you add yourself are never declined automatically.
+            customer is emailed. Requests you haven&apos;t approved or declined in time, or by their start time, are released the same way,
+            and you get an email about it. Bookings you add yourself are never released automatically.
           </p>
+          <Field
+            label="Customers can book (days ahead)"
+            name="bookingWindowDays"
+            type="number"
+            min={1}
+            max={platform.maxBookingWindowDays}
+            defaultValue={settings.bookingWindowDays}
+            required
+          />
           <label className="block text-sm">
             <span className="font-medium">Payment instructions</span>
             <textarea name="instructions" rows={3} maxLength={500} defaultValue={settings.instructions} className={inputClass} />
@@ -77,6 +83,10 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
             defaultValue={settings.staffNotifyEmail}
             placeholder="frontdesk@yourfacility.com (leave empty to turn off)"
           />
+          <p className="text-xs text-black/50">
+            Also gets an email when a customer cancels, or when a request or unpaid booking is released automatically. The bell in the
+            dashboard only alerts you while it&apos;s open, so keep an address here you check on your phone.
+          </p>
         </section>
 
         <aside className="space-y-4">
@@ -114,9 +124,6 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
               </button>
             )}
           </div>
-          {result && (
-            <p className={`rounded-lg px-3 py-2 text-sm ${result.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{result.message}</p>
-          )}
           <button
             type="submit"
             disabled={saving}
@@ -146,13 +153,17 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
           <button
             type="button"
             disabled={testing}
-            onClick={() => startTesting(async () => setTestResult(await sendTestEmail(testTo)))}
+            onClick={() =>
+              startTesting(async () => {
+                const r = await sendTestEmail(testTo);
+                toast.result({ ok: r.ok, message: r.detail });
+              })
+            }
             className="rounded-lg border border-black/10 bg-white px-4 py-2 text-sm font-medium hover:border-emerald-600 disabled:opacity-50"
           >
             {testing ? "Sending…" : "Send test email"}
           </button>
         </div>
-        {testResult && <p className={`mt-2 text-sm ${testResult.ok ? "text-emerald-700" : "text-red-700"}`}>{testResult.detail}</p>}
       </section>
     </div>
   );

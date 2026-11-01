@@ -4,13 +4,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { createBooking, getAvailability, type Availability } from "@/app/actions";
-import { formatHour, formatHourRange, formatMoney, type Resource } from "@/lib/facility";
+import { toast } from "@/app/toaster";
+import { formatHour, formatHourRange, formatMoney, type PeakPricing, type Resource } from "@/lib/facility";
+import { isPeakHour, priceFor } from "@/lib/schedule";
 import { bookableDates, facilityNow, formatDate } from "@/lib/time";
 
 type ActivityInfo = {
   slug: string;
   name: string;
   pricePerHour: number;
+  peak: PeakPricing | null;
+  noDownpayment: boolean;
   openHour: number;
   closeHour: number;
   maxHoursPerBooking: number;
@@ -23,17 +27,16 @@ type Selection = { startHour: number; hours: number } | null;
 
 const noopSubscribe = () => () => {};
 
-export default function BookingWidget({ ownerId, activity }: { ownerId: string; activity: ActivityInfo }) {
+export default function BookingWidget({ ownerId, activity, bookingWindowDays }: { ownerId: string; activity: ActivityInfo; bookingWindowDays: number }) {
   const router = useRouter();
   // Dates depend on the current time, so read "today" on the client only.
   const today = useSyncExternalStore(noopSubscribe, () => facilityNow().date, () => null);
-  const dates = useMemo(() => (today ? bookableDates(today) : []), [today]);
+  const dates = useMemo(() => (today ? bookableDates(today, bookingWindowDays) : []), [today, bookingWindowDays]);
   const [pickedDate, setDate] = useState<string | null>(null);
   const date = pickedDate ?? dates[0] ?? null;
   const [resourceId, setResourceId] = useState(activity.resources[0].id);
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
-  const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
   const [submitting, startSubmitting] = useTransition();
 
@@ -50,9 +53,11 @@ export default function BookingWidget({ ownerId, activity }: { ownerId: string; 
   }, [date, load]);
 
   const hours = Array.from({ length: activity.closeHour - activity.openHour }, (_, i) => activity.openHour + i);
+  const closed = availability?.date === date ? availability.closed : null;
   const isFree = (rid: string, h: number) =>
     !!availability &&
     availability.date === date &&
+    !availability.closed &&
     !(availability.booked[rid] ?? []).includes(h) &&
     (availability.currentHour === null || h > availability.currentHour);
   const freeCount = (rid: string) => hours.filter((h) => isFree(rid, h)).length;
@@ -60,17 +65,14 @@ export default function BookingWidget({ ownerId, activity }: { ownerId: string; 
   function pickDate(d: string) {
     setDate(d);
     setSelection(null);
-    setError(null);
   }
 
   function pickResource(id: string) {
     setResourceId(id);
     setSelection(null);
-    setError(null);
   }
 
   function pickHour(h: number) {
-    setError(null);
     if (selection) {
       const end = selection.startHour + selection.hours;
       if (h === selection.startHour) return setSelection(null);
@@ -99,13 +101,15 @@ export default function BookingWidget({ ownerId, activity }: { ownerId: string; 
       if (result.ok) {
         router.push(`/bookings/${result.token}`);
       } else {
-        setError(result.error);
+        toast.error(result.error);
         load(date);
       }
     });
   }
 
   const resource = activity.resources.find((r) => r.id === resourceId)!;
+  const total = selection && date ? priceFor(activity, date, selection.startHour, selection.hours) : 0;
+  const hasPeak = !!date && !!activity.peak && hours.some((h) => isPeakHour(activity, date, h));
   const canExtend =
     selection &&
     selection.hours < activity.maxHoursPerBooking &&
@@ -156,7 +160,7 @@ export default function BookingWidget({ ownerId, activity }: { ownerId: string; 
               >
                 <span className="block font-semibold">{r.name}</span>
                 <span className="block text-xs text-black/50">
-                  {free === null || loading ? "…" : free === 0 ? "Fully booked" : `${free} slot${free === 1 ? "" : "s"} free`}
+                  {free === null || loading ? "…" : closed ? "Closed" : free === 0 ? "Fully booked" : `${free} slot${free === 1 ? "" : "s"} free`}
                 </span>
               </button>
             );
@@ -168,6 +172,11 @@ export default function BookingWidget({ ownerId, activity }: { ownerId: string; 
         <p className="-mt-2 mb-3 text-sm text-black/50">
           Tap a start time, then tap the next slots to extend (up to {activity.maxHoursPerBooking} hours).
         </p>
+        {closed && (
+          <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {activity.name} is closed on {date && formatDate(date, { weekday: "long", month: "long" })}: {closed}. Pick another day.
+          </p>
+        )}
         <div className={`grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 ${loading ? "opacity-50" : ""}`}>
           {hours.map((h) => {
             const free = isFree(resourceId, h);
@@ -186,14 +195,16 @@ export default function BookingWidget({ ownerId, activity }: { ownerId: string; 
                 }`}
               >
                 {formatHour(h)}
+                {date && free && isPeakHour(activity, date, h) && <span className={`block text-[10px] ${selected ? "text-white/80" : "text-amber-700"}`}>Peak</span>}
               </button>
             );
           })}
         </div>
-        <div className="mt-3 flex gap-4 text-xs text-black/50">
+        <div className="mt-3 flex flex-wrap gap-4 text-xs text-black/50">
           <Legend className="border border-black/10 bg-white" label="Available" />
           <Legend className="bg-emerald-700" label="Selected" />
           <Legend className="bg-black/10" label="Booked / past" />
+          {hasPeak && activity.peak && <span className="text-amber-700">Peak hours: {formatMoney(activity.peak.pricePerHour)}/hour</span>}
         </div>
       </Step>
 
@@ -210,7 +221,7 @@ export default function BookingWidget({ ownerId, activity }: { ownerId: string; 
                     {formatDate(date, { weekday: "long", month: "long" })} · {formatHourRange(selection.startHour, selection.hours)}
                   </p>
                 </div>
-                <p className="text-xl font-bold text-emerald-900">{formatMoney(activity.pricePerHour * selection.hours)}</p>
+                <p className="text-xl font-bold text-emerald-900">{formatMoney(total)}</p>
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <span className="text-emerald-900/70">Duration:</span>
@@ -263,17 +274,19 @@ export default function BookingWidget({ ownerId, activity }: { ownerId: string; 
               />
             </label>
 
-            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
             <button
               type="submit"
               disabled={submitting}
               className="w-full rounded-xl bg-emerald-700 px-6 py-3 font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
             >
-              {submitting ? "Sending request…" : `Request booking · ${formatMoney(activity.pricePerHour * selection.hours)}`}
+              {submitting ? "Sending request…" : `Request booking · ${formatMoney(total)}`}
             </button>
             <p className="text-center text-xs text-black/50">
-              We hold the slot while staff review it, then email you a QR code to pay the downpayment. Your details go to this facility to
+              {activity.noDownpayment
+                ? "We hold the slot while staff review it, then email you once it's confirmed. No downpayment: you pay at the venue."
+                : "We hold the slot while staff review it, then email you a QR code to pay the downpayment."}{" "}
+              Your details go to this facility to
               manage your booking (
               <Link href="/privacy" target="_blank" className="underline hover:text-black">
                 privacy notice
@@ -283,7 +296,6 @@ export default function BookingWidget({ ownerId, activity }: { ownerId: string; 
           </form>
         ) : (
           <>
-            {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
             <p className="text-sm text-black/50">Select a time slot above to continue.</p>
           </>
         )}

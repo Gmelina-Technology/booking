@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import type { Booking, DocKind, PlatformDocKind, InsertOwnerResult, LoginFailure, Owner, StoreBackend } from "./store-types";
+import { SlotTaken, type Booking, type DocKind, type PlatformDocKind, type InsertOwnerResult, type LoginFailure, type Owner, type StoreBackend } from "./store-types";
 
 // Postgres storage for production (e.g. Neon via the Vercel Marketplace).
 // Enabled when DATABASE_URL (or POSTGRES_URL) is set.
@@ -261,20 +261,26 @@ export const postgresStore: StoreBackend = {
 
   async updateBooking(id, change) {
     const q = await db();
-    return q.begin(async (tx) => {
-      const [row] = await tx<Row[]>`SELECT data FROM bookings WHERE id = ${id} FOR UPDATE`;
-      if (!row) return null;
-      const booking = row.data;
-      change(booking);
-      const c = columns(booking);
-      await tx`
-        UPDATE bookings SET
-          access_token = ${c.access_token}, activity_slug = ${c.activity_slug}, resource_id = ${c.resource_id},
-          date = ${c.date}, start_hour = ${c.start_hour}, hours = ${c.hours}, status = ${c.status},
-          data = ${tx.json(c.data)}
-        WHERE id = ${id}`;
-      return booking;
-    }) as Promise<Booking | null>;
+    try {
+      return (await q.begin(async (tx) => {
+        const [row] = await tx<Row[]>`SELECT data FROM bookings WHERE id = ${id} FOR UPDATE`;
+        if (!row) return null;
+        const booking = row.data;
+        change(booking);
+        const c = columns(booking);
+        await tx`
+          UPDATE bookings SET
+            access_token = ${c.access_token}, activity_slug = ${c.activity_slug}, resource_id = ${c.resource_id},
+            date = ${c.date}, start_hour = ${c.start_hour}, hours = ${c.hours}, status = ${c.status},
+            data = ${tx.json(c.data)}
+          WHERE id = ${id}`;
+        return booking;
+      })) as Booking | null;
+    } catch (err) {
+      // A move onto a court-hour that's taken trips the overlap constraint.
+      if ((err as { code?: string }).code === EXCLUSION_VIOLATION) throw new SlotTaken();
+      throw err;
+    }
   },
 
   readDoc(ownerId, kind, fallback) {

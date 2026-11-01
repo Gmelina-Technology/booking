@@ -202,7 +202,7 @@ async function Partner({ params }: { params: Promise<{ id: string }> }) {
                     <td className="px-4 py-3">{activityName.get(b.activitySlug)?.name ?? b.activitySlug}</td>
                     <td className="px-4 py-3">{b.name}</td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={b.status} />
+                      <StatusBadge status={b.status} blocked={b.blocked} />
                       {isStale(b) && <span className="ml-1.5 text-xs font-medium text-amber-800">waiting</span>}
                     </td>
                   </tr>

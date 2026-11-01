@@ -2,6 +2,8 @@
 // on the site; each business edits its own profile at /app/business and its
 // activities at /app/activities (`defaultActivities` only seeds them).
 
+import type { SocialLinks } from "./socials";
+
 export type Resource = { id: string; name: string };
 
 export type Activity = {
@@ -15,9 +17,15 @@ export type Activity = {
   /** Hidden from customers when false. Existing bookings are kept. */
   active: boolean;
   pricePerHour: number;
+  /** No downpayment: approving a request confirms it, and the customer pays the full total at the venue. */
+  noDownpayment?: boolean;
   /** Opening hour (inclusive) and closing hour (exclusive), 24h clock. */
   openHour: number;
   closeHour: number;
+  /** Weekdays it's closed every week, 0 = Sunday … 6 = Saturday. */
+  closedDays?: number[];
+  /** A higher hourly price for busy hours (lib/schedule.ts). Missing or null: one price all day. */
+  peak?: PeakPricing | null;
   maxHoursPerBooking: number;
   maxPlayers: number;
   resourceLabel: string;
@@ -25,17 +33,33 @@ export type Activity = {
   includes: string[];
 };
 
+/** Peak hours: `pricePerHour` applies from `fromHour` (inclusive) to `toHour` (exclusive) every day, and all day on weekends when `weekends`. */
+export type PeakPricing = { pricePerHour: number; fromHour: number; toHour: number; weekends: boolean };
+
+/** A day the business, or one activity, is closed (holiday, maintenance, private event). */
+export type Closure = {
+  id: string;
+  /** "YYYY-MM-DD" */
+  date: string;
+  /** The activity that's closed, or "" for the whole business. */
+  activitySlug: string;
+  /** Shown to customers, e.g. "Holiday" or "Court resurfacing". */
+  note: string;
+};
+
 /** The booking platform itself. Edit this to rebrand the site. */
 export const platform = {
-  name: "Courtside",
+  name: "CourtHub",
   tagline: "Online court booking for sports facilities.",
   timeZone: "Asia/Manila",
   currency: "PHP",
   locale: "en-PH",
-  /** How many days ahead customers can book. */
+  /** How many days ahead customers can book, until a business sets its own in Settings. */
   bookingWindowDays: 14,
+  /** The longest booking window a business can set. */
+  maxBookingWindowDays: 180,
   /** Who runs the site, shown in the privacy notice and terms (/privacy, /terms). Set both before launch. */
-  operator: "Courtside",
+  operator: "CourtHub",
   /** Where people send privacy requests (Data Privacy Act). */
   privacyEmail: "privacy@your-domain.com",
   /** Where owners can ask questions, linked as "Contact" in the footer. Empty hides the link. */
@@ -54,6 +78,8 @@ export type BusinessProfile = {
   phone: string;
   /** Public contact email (may differ from the sign-in email). */
   email: string;
+  /** Social media accounts linked from the page. Missing on profiles saved before this existed. */
+  socials?: SocialLinks;
 };
 
 export function defaultProfile(name: string, email: string): BusinessProfile {
@@ -220,8 +246,12 @@ export type PaymentSettings = {
   requestWindowHours: number;
   /** Extra instructions shown in the email and on the booking page. */
   instructions: string;
-  /** Where new-booking alerts go. Empty to turn them off. */
+  /** Where new-booking alerts go (and notices of bookings released or cancelled by customers). Empty to turn them off. */
   staffNotifyEmail: string;
+  /** How many days ahead customers can book. */
+  bookingWindowDays: number;
+  /** Closed days: holidays, maintenance. Managed under Payments & alerts → Closures. */
+  closures: Closure[];
 };
 
 export const defaultPaymentSettings: PaymentSettings = {
@@ -234,7 +264,14 @@ export const defaultPaymentSettings: PaymentSettings = {
   requestWindowHours: 48,
   instructions: "Scan the QR code, pay the downpayment, then enter your payment reference number on your booking page.",
   staffNotifyEmail: "",
+  bookingWindowDays: platform.bookingWindowDays,
+  closures: [],
 };
+
+/** Whether customers can be asked for a downpayment: a QR code or an account number is set. */
+export function paymentReady(settings: Pick<PaymentSettings, "qrPhoto" | "accountNumber">) {
+  return !!settings.qrPhoto || !!settings.accountNumber.trim();
+}
 
 export function downpaymentFor(total: number, percent: number) {
   return Math.ceil((total * percent) / 100);

@@ -1,4 +1,4 @@
-# Courtside — booking pages for sports facilities
+# CourtHub — booking pages for sports facilities
 
 A booking platform where each sports facility (business owner) gets its own public page at
 **`/p/@<handle>`**, with activities such as pickleball, badminton, tennis, basketball and table
@@ -23,7 +23,7 @@ Checks (the same ones CI runs on every pull request, in `.github/workflows/ci.ym
 ```bash
 npm run lint
 npx next typegen && npx tsc --noEmit
-npm test        # Vitest: sessions, passwords, reset links, bookings, holds, rate limits, fees, platform admin
+npm test        # Vitest: sessions, passwords, reset links, bookings, holds, rate limits, fees, platform admin, sales
 npm run build
 ```
 
@@ -102,29 +102,48 @@ sign up its owner first. `STAFF_PASSWORD` is no longer used, and old staff sessi
 
 | Status | What happened | Who acts next |
 |--------|---------------|---------------|
-| **Pending** | Customer submitted the booking form. The slot is held. Staff get an alert email if one is set in Settings. | Staff: **Approve & send payment QR** or **Decline** |
-| **Awaiting payment** | Staff approved. The customer is emailed the downpayment amount, the payment QR and a link to their private booking page. | Customer pays, then enters the payment reference on their booking page |
-| **Awaiting payment** + reference | The customer says they've paid. The booking moves to **Payments to verify** in the staff inbox. | Staff check the account, then **Downpayment received** |
-| **Confirmed** | Downpayment verified. The customer gets a confirmation email. The balance is paid at the front desk. | — |
-| **Cancelled** | Declined or cancelled by staff (with an optional reason), or released automatically (below). The customer is emailed and the slot is freed. | — |
+| **Pending** | Customer submitted the booking form. The slot is held. Staff get an alert email if one is set in Settings. | Staff: **Approve & send payment QR** or **Decline** (or **Approve all** on the New requests tab) |
+| **Awaiting payment** | Staff approved. The customer is emailed the downpayment amount, the payment QR and a link to their private booking page. A booking with no email (a phone booking staff added) just waits: staff collect the payment themselves. | Customer pays, then enters the payment reference, the amount and optionally a receipt screenshot on their booking page |
+| **Awaiting payment** + reference | The customer says they've paid. The booking moves to **To verify** in the staff inbox, with the amount (and any shortfall) and the receipt. | Staff check the account, then **Downpayment received**, or ⋯ → **Payment not found** (clears the reference, restarts the payment window and emails the customer to check) |
+| **Confirmed** | Downpayment verified. The customer gets a confirmation email. The balance is paid at the front desk. | Staff: **Paid in full** once the balance is collected, or ⋯ → **Mark no-show** after the start time |
+| **Cancelled** | Declined or cancelled by staff (with an optional reason), cancelled by the customer from their booking page, or released automatically (below). The customer is emailed (if they have an email) and the slot is freed. | — |
+
+**Changing a booking.** **Edit / reschedule** in a booking's details moves it to another date, time
+or court, or fixes the customer's details, without cancelling it. The move is refused if the new
+slot is taken (the file store checks overlaps; Postgres's `bookings_owner_no_overlap` does too, as
+`SlotTaken`), the total is re-priced, a downpayment already received stays as it is, and the
+customer can be emailed the new time. **Customers can cancel** their own booking from its private
+page until it starts; staff get a bell notification and an alert email, and a paid downpayment is
+left to the business's refund policy.
+
+**Staff bookings** (**Create Booking**, or click an empty hour in the Day calendar) show which
+hours are free on each court, refuse times that have passed, and must say how they start: **Paid in
+full**, **Confirmed, pays at the venue**, **Tentative**, or **Block the court** (no customer, no
+revenue, no fee: maintenance or private use). They need a phone number or an email.
+
+**Search** on All bookings and the Inbox matches reference, name, email, phone, notes and payment
+reference, across every date. The Inbox always shows every date, so a payment reference nobody
+checked before the booking's day still needs a decision.
 
 The staff bar shows a **"N to review"** badge for new requests and payments to verify.
 
 **In-app notifications** (`lib/notifications.ts`): the bell in the staff header lists new booking
-requests, payment references customers enter, and holds released automatically, with an unread
-count. Clicking one opens that booking. It checks for new ones every 30 seconds while the tab is
+requests, payment references customers enter, customers cancelling, and holds released
+automatically, with an unread count. Clicking one opens that booking. It checks for new ones every 30 seconds while the tab is
 open, and staff can turn on **desktop alerts** from the bell to get a browser notification as well
 (per browser, and only while a staff page is open). The latest 50 are kept per business, in the
 owner's `notifications` document. Platform admins also see the platform's notifications (new partners) in the
 same bell, marked **Platform** (see [New partner alerts](#new-partner-alerts)).
 
-**Holds are released automatically** (`lib/holds.ts`). The booking is cancelled, the slot is freed
-and the customer is emailed when:
+**Holds are released automatically** (`lib/holds.ts`). The booking is cancelled, the slot is freed,
+the customer is emailed and the staff alert address gets an email when:
 
 - an approved booking passes its payment window (Settings, default 24 hours) with no payment
   reference entered. With a reference, staff check it and decide;
 - a request isn't approved or declined within the review window (Settings, default 48 hours), or its
-  start time arrives first. Bookings staff add themselves (walk-ins, phone bookings) are left alone.
+  start time arrives first.
+
+Bookings staff add themselves (walk-ins, phone bookings) are never released, whatever their status.
 
 This happens as soon as anyone views that day's slots or makes a booking, when staff open the
 inbox, and in a daily sweep for every business (`/api/cron/release-holds`, scheduled in
@@ -137,11 +156,30 @@ submissions an hour per IP and 5 per booking.
 In the bookings table, the booking reference is the first column. Click it to copy it (cards on
 smaller screens have the same copy button).
 
+## Sales
+
+**Sales** (`/app/sales`) shows each partner how their business is growing. The calculations are
+in [`lib/sales.ts`](lib/sales.ts).
+
+- **Revenue** is the total of confirmed bookings, counted on the day they're played. Pending,
+  awaiting-payment and cancelled bookings aren't revenue, a no-show only counts the downpayment
+  kept, and blocked courts aren't sales.
+- The four figures at the top (revenue, confirmed bookings, average booking, customers) are compared
+  with the month before. The current month is compared with the same days of last month, so a month
+  that's only half played doesn't look like a drop. Confirmed bookings still to come this month are
+  shown under the revenue.
+- **Customers** are matched by email, or by phone when there's no email. A customer is **new** in the
+  month of their first confirmed booking. Bookings with erased customer details still count as
+  revenue but not as customers.
+- A 12-month revenue chart (click a bar to open that month), revenue by activity, and a month-by-month
+  table with hours, new customers and cancellations.
+
 ## Partner fees
 
 Partners (business owners) pay no monthly fee. Each booking is charged once it's confirmed and its
 time slot has ended: hours booked × the rate, capped per booking (default ₱10 per booked hour, at
-most ₱50 per booking). Cancelled bookings and quiet months cost nothing. The calculation is in
+most ₱50 per booking). Cancelled bookings, courts the partner blocked and quiet months cost
+nothing. No-shows are still charged, since the court was held. The calculation is in
 [`lib/fees.ts`](lib/fees.ts).
 
 - **Platform admins** (accounts whose email is in `PLATFORM_ADMIN_EMAILS`, comma-separated) set the
@@ -173,7 +211,11 @@ dashboard (`/app`) as theirs. An amber bar on every staff page names the partner
 ### Payment & email setup
 
 1. Sign in and open **Payments & alerts** (`/app/settings`). Upload your GCash/Maya **Receive money QR**,
-   and set the account name and number, downpayment %, payment window, and the staff alert email.
+   and set the account name and number, downpayment %, payment window, how many days ahead
+   customers can book (default 14, up to 180), and the staff alert email. Until a QR code or account
+   number is set, customers can't request activities that need a downpayment: the activity page says
+   online booking opens soon. **Closures** on the same page close the business, or one activity, for
+   a day (holidays, maintenance).
 2. Set the `SMTP_*` variables and `SITE_URL` (see `.env.example`). Use **Send test email** on the
    Settings page to check delivery. Until `SMTP_HOST` is set, emails are saved as HTML files in
    `data/outbox/` instead of being sent, which is handy for previewing them in development.
@@ -252,7 +294,8 @@ reason, which the partner sees:
 | `/app/account` | Account & security: change sign-in email or password, sign out everywhere, delete the account |
 | `/account/confirm-email/<token>` | Confirms a new sign-in email from the emailed link |
 | `/privacy`, `/terms` | Privacy notice and terms of service (linked from every footer, sign-up and the booking form) |
-| `/app` | Staff overview: what needs a decision, today's schedule, this week's totals |
+| `/app` | Staff overview: what needs a decision, today's schedule, this week's totals, this year's sales by month |
+| `/app/sales` | Sales: revenue, bookings and customers by month, compared with the month before |
 | `/app/inbox` | New requests, payments to verify, and approved bookings awaiting payment |
 | `/app/calendar` | Month, week and day calendar of bookings |
 | `/app/bookings` | All bookings by status, plus the day-by-day schedule |
@@ -270,7 +313,7 @@ reason, which the partner sees:
 The route folders are `app/(platform)/` (platform header and footer), `app/p/[handle]/` (the
 business's own header and footer), and `app/(staff)/` (the signed-in header), which holds the partner
 dashboard in `app/(staff)/app/` and the platform admin area in `app/(staff)/admin/`. The `@` in `/p/@handle` is optional when typed, so
-`/p/courtside-hub` works too.
+`/p/courthub` works too.
 
 ## Customize
 
@@ -287,8 +330,10 @@ and ordered, and the rest of the banner is filled with event and stock photos. T
 desktop and phone layouts. Changes go live only after **Save banner**.
 
 Staff manage activities at `/app/activities`. For each one they can set the name, icon, card
-colour, description, price per hour, opening hours, maximum booking length, maximum players, the
-list of courts or tables, and what's included. They can also hide it from customers or reorder it.
+colour, description, price per hour, opening hours, weekdays it's closed, a peak-hour price (for
+set hours every day, optionally all weekend; a booking is priced hour by hour, in
+[`lib/schedule.ts`](lib/schedule.ts)), maximum booking length, maximum players, the list of courts
+or tables, and what's included. They can also hide it from customers or reorder it.
 A few rules protect existing bookings:
 
 - An activity's URL (its slug) is fixed when it's created, so links and bookings keep working after

@@ -3,8 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getActivity } from "@/lib/activities";
-import { formatHour, formatMoney } from "@/lib/facility";
+import { formatHour, formatMoney, paymentReady } from "@/lib/facility";
 import { getPublicOwner, ownerFromParams, ownerPath } from "@/lib/owners";
+import { WEEKDAY_NAMES } from "@/lib/schedule";
+import { readSettings } from "@/lib/store";
 import BookingWidget from "./booking-widget";
 
 export async function generateMetadata({ params }: PageProps<"/p/[handle]/activities/[slug]">): Promise<Metadata> {
@@ -26,6 +28,7 @@ async function ActivityContent({ params }: { params: Promise<{ handle: string; s
   const owner = await ownerFromParams(params);
   const activity = await getActivity(owner.id, (await params).slug);
   if (!activity || !activity.active) notFound();
+  const settings = await readSettings(owner.id);
 
   return (
     <>
@@ -45,20 +48,33 @@ async function ActivityContent({ params }: { params: Promise<{ handle: string; s
       </section>
 
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <BookingWidget
-          ownerId={owner.id}
-          activity={{
-            slug: activity.slug,
-            name: activity.name,
-            pricePerHour: activity.pricePerHour,
-            openHour: activity.openHour,
-            closeHour: activity.closeHour,
-            maxHoursPerBooking: activity.maxHoursPerBooking,
-            maxPlayers: activity.maxPlayers,
-            resourceLabel: activity.resourceLabel,
-            resources: activity.resources,
-          }}
-        />
+        {activity.noDownpayment || paymentReady(settings) ? (
+          <BookingWidget
+            ownerId={owner.id}
+            bookingWindowDays={settings.bookingWindowDays}
+            activity={{
+              slug: activity.slug,
+              name: activity.name,
+              pricePerHour: activity.pricePerHour,
+              peak: activity.peak ?? null,
+              noDownpayment: !!activity.noDownpayment,
+              openHour: activity.openHour,
+              closeHour: activity.closeHour,
+              maxHoursPerBooking: activity.maxHoursPerBooking,
+              maxPlayers: activity.maxPlayers,
+              resourceLabel: activity.resourceLabel,
+              resources: activity.resources,
+            }}
+          />
+        ) : (
+          <div className="rounded-2xl border border-black/5 bg-white p-6 text-sm shadow-sm">
+            <p className="font-semibold">Online booking opens soon</p>
+            <p className="mt-1 text-black/60">
+              {owner.profile.name} is still setting up online payments.
+              {(owner.profile.phone || owner.profile.email) && ` To book now, contact them at ${owner.profile.phone || owner.profile.email}.`}
+            </p>
+          </div>
+        )}
 
         <aside className="space-y-6 lg:order-first lg:col-start-2 lg:row-start-1">
           <div className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
@@ -69,6 +85,27 @@ async function ActivityContent({ params }: { params: Promise<{ handle: string; s
                 <dt className="text-black/50">Price</dt>
                 <dd className="font-medium">{formatMoney(activity.pricePerHour)} / hour</dd>
               </div>
+              {activity.peak && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-black/50">Peak</dt>
+                  <dd className="text-right font-medium">
+                    {formatMoney(activity.peak.pricePerHour)} / hour, {formatHour(activity.peak.fromHour)}–{formatHour(activity.peak.toHour)}
+                    {activity.peak.weekends && " and all weekend"}
+                  </dd>
+                </div>
+              )}
+              {!!activity.closedDays?.length && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-black/50">Closed</dt>
+                  <dd className="text-right font-medium">{activity.closedDays.map((d) => `${WEEKDAY_NAMES[d]}s`).join(", ")}</dd>
+                </div>
+              )}
+              {activity.noDownpayment && (
+                <div className="flex justify-between">
+                  <dt className="text-black/50">Payment</dt>
+                  <dd className="font-medium">At the venue, no downpayment</dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-black/50">Hours</dt>
                 <dd className="font-medium">

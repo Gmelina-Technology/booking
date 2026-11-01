@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { ToastOnLoad } from "@/app/toaster";
 import LoginForm from "./login-form";
 
 export const metadata: Metadata = {
@@ -32,11 +33,7 @@ async function LoginFormWithNext({ searchParams }: { searchParams: Promise<Recor
   const { next, signedOut } = await searchParams;
   return (
     <>
-      {signedOut === "all" && (
-        <p role="status" className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-          You&apos;ve been signed out on all devices.
-        </p>
-      )}
+      {signedOut === "all" && <ToastOnLoad message="You've been signed out on all devices." param="signedOut" />}
       <LoginForm next={typeof next === "string" ? next : "/app"} />
     </>
   );

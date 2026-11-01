@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { platform } from "@/lib/facility";
 import { getPublicOwner, ownerFromParams, ownerPath } from "@/lib/owners";
+import { ShareMenu } from "./share";
+import SocialLinks from "./social-links";
 
 // Every business page lives at /p/@<handle>. This layout gives it the
 // business's own header and footer instead of the platform's.
@@ -11,7 +13,15 @@ export async function generateMetadata({ params }: LayoutProps<"/p/[handle]">): 
   const owner = await getPublicOwner((await params).handle);
   if (!owner) return { title: "Not found" };
   const { name, tagline } = owner.profile;
-  return { title: { absolute: `${name} — Book a court`, template: `%s · ${name}` }, description: tagline };
+  const description = tagline || `Book a court at ${name} online.`;
+  // How the page looks when shared on Facebook, Messenger, X, etc. The image is ./opengraph-image.tsx.
+  // No og:url: activity pages inherit this, and Facebook would send their shares to the home page.
+  return {
+    title: { absolute: `${name} — Book a court`, template: `%s · ${name}` },
+    description,
+    openGraph: { type: "website", siteName: platform.name, title: `${name} — Book a court`, description },
+    twitter: { card: "summary_large_image", title: `${name} — Book a court`, description },
+  };
 }
 
 export default function OwnerLayout({ children, params }: LayoutProps<"/p/[handle]">) {
@@ -46,6 +56,8 @@ async function Brand({ params }: { params: Promise<{ handle: string }> }) {
         <span className="truncate">{profile.name}</span>
       </Link>
       <nav className="flex shrink-0 items-center gap-1 text-sm font-medium">
+        <SocialLinks socials={profile.socials} name={profile.name} className="mr-1 hidden md:flex" />
+        <ShareMenu path={home} text={`Book a court at ${profile.name}`} />
         <Link href={`${home}#activities`} className="hidden rounded-lg px-3 py-2 hover:bg-black/5 sm:block">
           Activities
         </Link>
@@ -68,6 +80,7 @@ async function Footer({ params }: { params: Promise<{ handle: string }> }) {
         <div>
           <p className="font-semibold text-black">{profile.name}</p>
           {profile.tagline && <p className="mt-1">{profile.tagline}</p>}
+          <SocialLinks socials={profile.socials} name={profile.name} className="-ml-2 mt-3" />
         </div>
         {profile.address && (
           <div>

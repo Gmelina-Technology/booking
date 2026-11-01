@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Booking, DocKind, PlatformDocKind, LoginFailure, Owner, StoreBackend } from "./store-types";
+import { SlotTaken, type Booking, type DocKind, type PlatformDocKind, type LoginFailure, type Owner, type StoreBackend } from "./store-types";
 
 // JSON files in ./data, for local development with zero setup. Single-process
 // only: writes are serialized in memory, which doesn't work across serverless
@@ -50,6 +50,17 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 const overlaps = (a: Booking, b: Booking) => a.startHour < b.startHour + b.hours && b.startHour < a.startHour + a.hours;
+
+/** Whether `b` is another active booking overlapping `booking` on the same court (the file twin of bookings_owner_no_overlap). */
+const clashes = (b: Booking, booking: Booking) =>
+  b.id !== booking.id &&
+  b.status !== "cancelled" &&
+  booking.status !== "cancelled" &&
+  b.ownerId === booking.ownerId &&
+  b.activitySlug === booking.activitySlug &&
+  b.resourceId === booking.resourceId &&
+  b.date === booking.date &&
+  overlaps(b, booking);
 
 /** Gives the first account the bookings and documents from before accounts existed. */
 async function adoptLegacyData(ownerId: string) {
@@ -138,16 +149,7 @@ export const fileStore: StoreBackend = {
   insertBooking(booking) {
     return exclusive(async () => {
       const all = await readAll();
-      const clash = all.some(
-        (b) =>
-          b.status !== "cancelled" &&
-          b.ownerId === booking.ownerId &&
-          b.activitySlug === booking.activitySlug &&
-          b.resourceId === booking.resourceId &&
-          b.date === booking.date &&
-          overlaps(b, booking),
-      );
-      if (clash) return false;
+      if (all.some((b) => clashes(b, booking))) return false;
       await writeAll([...all, booking]);
       return true;
     });
@@ -156,9 +158,13 @@ export const fileStore: StoreBackend = {
   updateBooking(id, change) {
     return exclusive(async () => {
       const all = await readAll();
-      const booking = all.find((b) => b.id === id);
-      if (!booking) return null;
+      const i = all.findIndex((b) => b.id === id);
+      if (i === -1) return null;
+      // Change a copy, so a throw (or an overlap) leaves the stored booking untouched.
+      const booking = structuredClone(all[i]);
       change(booking);
+      if (all.some((b) => clashes(b, booking))) throw new SlotTaken();
+      all[i] = booking;
       await writeAll(all);
       return booking;
     });

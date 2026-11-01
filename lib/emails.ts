@@ -109,15 +109,16 @@ Enter your payment reference here: ${ctx.link}
   };
 }
 
-/** Sent when staff mark the downpayment as received. */
+/** Sent when staff mark the downpayment as received, or approve a booking that needs no downpayment. */
 export function confirmedEmail(ctx: Ctx): Mail {
   const { booking } = ctx;
   const paid = booking.downpayment ?? 0;
   const balance = booking.total - paid;
   const extra = [
-    ["Downpayment received", formatMoney(paid)],
-    ...(balance > 0 ? [["Balance at the front desk", formatMoney(balance)]] : []),
+    ...(paid > 0 ? [["Downpayment received", formatMoney(paid)]] : []),
+    ...(balance > 0 ? [[paid > 0 ? "Balance at the front desk" : "Pay at the front desk", formatMoney(balance)]] : []),
   ];
+  const intro = paid > 0 ? "We've received your downpayment and your booking is confirmed." : "Your booking is confirmed.";
   return {
     to: booking.email,
     replyTo: ctx.business.email || undefined,
@@ -127,13 +128,13 @@ export function confirmedEmail(ctx: Ctx): Mail {
       "You're all set!",
       "#047857",
       `<p>Hi ${esc(booking.name)},</p>
-<p>We've received your downpayment and your booking is confirmed. Please arrive 10 minutes early.</p>
+<p>${intro} Please arrive 10 minutes early.</p>
 ${detailsHtml(ctx, extra)}
 ${button(ctx.link, "View your booking")}`,
     ),
     text: `Hi ${booking.name},
 
-We've received your downpayment and your booking is confirmed. Please arrive 10 minutes early.
+${intro} Please arrive 10 minutes early.
 
 ${detailsText(ctx, extra)}
 
@@ -189,6 +190,108 @@ export function staffNewBookingEmail(ctx: Ctx, to: string, adminLink: string): M
       `<p>A customer is waiting for approval.</p>${detailsHtml(ctx, extra)}${button(adminLink, "Review in staff inbox")}`,
     ),
     text: `New booking request waiting for approval.\n\n${detailsText(ctx, extra)}\n\nReview: ${adminLink}\n`,
+  };
+}
+
+/** Sent when staff move a booking to another date, time or court. `before` describes the old slot. */
+export function rescheduledEmail(ctx: Ctx, before: string): Mail {
+  const { booking } = ctx;
+  return {
+    to: booking.email,
+    replyTo: ctx.business.email || undefined,
+    subject: `Booking ${booking.id} moved`,
+    html: layout(
+      ctx.business,
+      "Your booking was moved",
+      "#047857",
+      `<p>Hi ${esc(booking.name)},</p>
+<p>We've moved your booking. It was <s>${esc(before)}</s>; here are the new details.</p>
+${detailsHtml(ctx)}
+<p>If the new time doesn't work for you, contact us at ${esc(contact(ctx.business))} and mention reference <strong>${esc(booking.id)}</strong>.</p>
+${button(ctx.link, "View your booking")}`,
+    ),
+    text: `Hi ${booking.name},
+
+We've moved your booking (it was ${before}). The new details:
+
+${detailsText(ctx)}
+
+If the new time doesn't work for you, contact ${contact(ctx.business)} with reference ${booking.id}.
+View your booking: ${ctx.link}
+`,
+  };
+}
+
+/** Sent when staff can't find the customer's payment: asks them to check it and enter the reference again. */
+export function paymentRetryEmail(ctx: Ctx, settings: Pick<PaymentSettings, "paymentWindowHours">, note: string): Mail {
+  const { booking } = ctx;
+  return {
+    to: booking.email,
+    replyTo: ctx.business.email || undefined,
+    subject: `We couldn't find your payment for booking ${booking.id}`,
+    html: layout(
+      ctx.business,
+      "We couldn't find your payment",
+      "#b45309",
+      `<p>Hi ${esc(booking.name)},</p>
+<p>We checked our account but couldn't find a payment matching the reference you entered for this booking.${note ? ` Note from us: <em>${esc(note)}</em>` : ""}</p>
+<p>Please check your receipt and enter the correct reference within <strong>${settings.paymentWindowHours} hours</strong> to keep your slot.</p>
+${detailsHtml(ctx)}
+${button(ctx.link, "Enter your payment reference")}`,
+    ),
+    text: `Hi ${booking.name},
+
+We couldn't find a payment matching the reference you entered for booking ${booking.id}.${note ? ` Note from us: ${note}` : ""}
+Please check your receipt and enter the correct reference within ${settings.paymentWindowHours} hours to keep your slot.
+
+${detailsText(ctx)}
+
+Enter your payment reference: ${ctx.link}
+`,
+  };
+}
+
+/** Alert to staff when holds were released automatically, so a missed request doesn't go unnoticed. */
+export function staffReleasedEmail(contexts: Ctx[], to: string, adminLink: string): Mail {
+  const lines = contexts.map(({ booking, activity }) => {
+    const court = activity?.resources.find((r) => r.id === booking.resourceId)?.name ?? booking.resourceId;
+    const slot = `${activity?.name ?? booking.activitySlug} · ${court} · ${formatDate(booking.date)} · ${formatHourRange(booking.startHour, booking.hours)}`;
+    return { booking, slot };
+  });
+  const business = contexts[0].business;
+  const count = lines.length === 1 ? "A booking was" : `${lines.length} bookings were`;
+  return {
+    to,
+    subject: `${count} released automatically`,
+    html: layout(
+      business,
+      `${count} released`,
+      "#52525b",
+      `<ul style="padding-left:18px">${lines
+        .map(({ booking, slot }) => `<li style="margin:6px 0"><strong>${esc(booking.id)}</strong> · ${esc(booking.name)} · ${esc(slot)}<br><span style="color:#6b7280">${esc(booking.cancelReason ?? "")}</span></li>`)
+        .join("")}</ul>
+<p>The customers were emailed and the slots are free again. To stop requests timing out, review them sooner or give yourself more time under Payments &amp; alerts.</p>
+${button(adminLink, "Open cancelled bookings")}`,
+    ),
+    text: `${count} released automatically:\n\n${lines.map(({ booking, slot }) => `${booking.id} · ${booking.name} · ${slot}\n  ${booking.cancelReason ?? ""}`).join("\n")}\n\n${adminLink}\n`,
+  };
+}
+
+/** Alert to staff when a customer cancels their own booking. */
+export function staffCustomerCancelledEmail(ctx: Ctx, to: string, adminLink: string): Mail {
+  const { booking } = ctx;
+  const paid = booking.paidAt && booking.downpayment ? [["Downpayment received", formatMoney(booking.downpayment)]] : [];
+  const extra = [["Customer", booking.name], ["Phone", booking.phone], ...paid];
+  return {
+    to,
+    subject: `Booking ${booking.id} cancelled by the customer`,
+    html: layout(
+      ctx.business,
+      "A customer cancelled",
+      "#52525b",
+      `<p>${esc(booking.name)} cancelled their booking. The slot is free again.${paid.length ? " They had paid a downpayment, so follow your refund policy." : ""}</p>${detailsHtml(ctx, extra)}${button(adminLink, "Open the booking")}`,
+    ),
+    text: `${booking.name} cancelled booking ${booking.id}. The slot is free again.${paid.length ? " They had paid a downpayment, so follow your refund policy." : ""}\n\n${detailsText(ctx, extra)}\n\n${adminLink}\n`,
   };
 }
 

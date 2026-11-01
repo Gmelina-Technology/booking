@@ -58,11 +58,17 @@ export function feeFor(rate: Pick<FeeRate, "ratePerHour" | "capPerBooking">, hou
   return rate.capPerBooking === null ? fee : Math.min(fee, rate.capPerBooking);
 }
 
-type BillableBooking = { id: string; date: string; startHour: number; hours: number; status: string };
+type BillableBooking = { id: string; date: string; startHour: number; hours: number; status: string; blocked?: boolean };
 
-/** Confirmed and its time slot is over. `now` is the facility's local date and hour. */
+/** A confirmed customer booking. Courts staff blocked for themselves are never charged. */
+const billable = (b: BillableBooking) => b.status === "confirmed" && !b.blocked;
+
+/**
+ * Billable and its time slot is over. `now` is the facility's local date and hour.
+ * No-shows are still charged: the court was held for the customer.
+ */
 export function isCharged(b: BillableBooking, now: { date: string; hour: number }): boolean {
-  if (b.status !== "confirmed") return false;
+  if (!billable(b)) return false;
   return b.date < now.date || (b.date === now.date && b.startHour + b.hours <= now.hour);
 }
 
@@ -87,6 +93,6 @@ export function monthlyStatement<B extends BillableBooking>(
     lines,
     total: lines.reduce((sum, l) => sum + l.fee, 0),
     hours: lines.reduce((sum, l) => sum + l.booking.hours, 0),
-    upcoming: inMonth.filter((b) => b.status === "confirmed" && !isCharged(b, now)).length,
+    upcoming: inMonth.filter((b) => billable(b) && !isCharged(b, now)).length,
   };
 }
