@@ -4,9 +4,9 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { currentAccount, currentOwner, isPlatformAdmin } from "@/lib/auth";
 import { platform } from "@/lib/facility";
-import { ownerPath } from "@/lib/owners";
+import { isPaused, ownerPath } from "@/lib/owners";
 import { listBookings } from "@/lib/store";
-import { facilityNow } from "@/lib/time";
+import { facilityNow, formatDate } from "@/lib/time";
 import StaffNav, { Sidebar } from "../nav";
 
 export const metadata: Metadata = {
@@ -27,6 +27,7 @@ export default function PartnerLayout({ children }: LayoutProps<"/app">) {
       <div className="min-w-0 flex-1">
         <Suspense>
           <SuspendedNotice />
+          <PausedNotice />
         </Suspense>
         {children}
       </div>
@@ -49,6 +50,22 @@ async function SuspendedNotice() {
       <p className="mt-1 text-red-900/80">
         Your existing bookings are unchanged and still need you. {platform.supportEmail ? `Questions? Email ${platform.supportEmail}.` : "Reply to the email we sent you with any questions."}
       </p>
+    </div>
+  );
+}
+
+/** Reminds a partner who paused their page that it isn't taking requests. */
+async function PausedNotice() {
+  await connection();
+  const owner = await currentOwner();
+  if (!owner?.pause || owner.suspension || !isPaused(owner.pause, facilityNow().date)) return null;
+  return (
+    <div role="status" className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 md:px-6">
+      <strong>Your booking page is paused</strong>
+      {owner.pause.until ? ` until ${formatDate(owner.pause.until)}` : ""}. Customers can&apos;t send new requests.{" "}
+      <Link href="/app/business#page-status" className="font-semibold underline hover:text-black">
+        Resume or change it
+      </Link>
     </div>
   );
 }

@@ -10,7 +10,7 @@ import { paymentReady } from "@/lib/facility";
 import { releaseOverdueHolds } from "@/lib/holds";
 import { sendMail } from "@/lib/mailer";
 import { notify } from "@/lib/notifications";
-import { getPublicOwnerById } from "@/lib/owners";
+import { getPublicOwnerById, isPaused } from "@/lib/owners";
 import { overLimit } from "@/lib/rate-limit";
 import { closedReason, priceFor } from "@/lib/schedule";
 import { siteUrl } from "@/lib/site-url";
@@ -82,6 +82,8 @@ export async function createBooking(input: {
 }): Promise<BookingResult> {
   const owner = await getPublicOwnerById(input.ownerId);
   if (!owner || owner.suspended) return { ok: false, error: "This business isn't taking bookings." };
+  const now = facilityNow();
+  if (isPaused(owner.pause, now.date)) return { ok: false, error: "This business isn't taking new bookings right now." };
   const activity = await getActivity(owner.id, input.activitySlug);
   if (!activity || !activity.active) return { ok: false, error: "This activity isn't available for booking." };
   if (!activity.resources.some((r) => r.id === input.resourceId)) return { ok: false, error: "Unknown court." };
@@ -89,7 +91,6 @@ export async function createBooking(input: {
   if (!activity.noDownpayment && !paymentReady(settings))
     return { ok: false, error: "This business is still setting up online payments. Please contact them to book." };
 
-  const now = facilityNow();
   if (!bookableDates(now.date, settings.bookingWindowDays).includes(input.date)) return { ok: false, error: "That date can't be booked." };
   const closed = closedReason(activity, settings.closures, input.date);
   if (closed) return { ok: false, error: `${activity.name} is closed that day (${closed}).` };

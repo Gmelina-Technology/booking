@@ -89,7 +89,15 @@ export type Owner = {
    * in and look after the bookings they already have.
    */
   suspension?: { at: string; by: string; reason: string };
+  /**
+   * Set while the partner has paused their own page (a holiday, renovation):
+   * it stays online with their message but takes no new requests, and leaves
+   * the directory. `until` ("YYYY-MM-DD") is the day it reopens by itself.
+   */
+  pause?: PagePause;
 };
+
+export type PagePause = { at: string; message: string; until?: string };
 
 /** What a staff notification is about (lib/notifications.ts). */
 export type NotificationKind = "new_request" | "payment_submitted" | "hold_released" | "customer_cancelled";

@@ -72,6 +72,14 @@ settings.
 - **Partner dashboard** at `/app` (the same URL for every partner) shows the signed-in owner's data. Its
   menu groups bookings, catalog, the public page and settings. **Business profile** edits the name, tagline, address, phone and contact email shown on their page
   and in emails.
+- **Pausing the page** (**Page status** on Business profile), for a holiday or renovation. The partner
+  adds an optional message for customers and an optional reopening date. While paused, the page
+  stays online but shows the message in place of booking, new requests are refused (`createBooking()`),
+  and it leaves the directory (`getListedOwners()` in `lib/owners.ts`). Existing bookings and their
+  links are unchanged. **Resume bookings now** ends it; with a reopening date it also ends by itself on
+  that day (`isPaused()`), and the daily sweep clears it. An amber notice in the staff area and a
+  **Paused** label for platform admins show it's on. This is separate from an admin
+  [suspending a partner](#managing-partners), which the partner can't undo.
 - **Platform admin area** at `/admin`, for platform users only (`PLATFORM_ADMIN_EMAILS`, see
   [Platform admin](#platform-admin)): partners, every partner's bookings, and fee rates. Platform admins also have a partner account, so their dashboard
   menu links to it. Anyone else gets a 404 on its pages, and a partner opening `/admin` itself is
@@ -325,7 +333,7 @@ reason, which the partner sees:
 | `/login` | Owner sign-in |
 | `/reset-password` | Forgot password: emails a one-time link to `/reset-password/<token>` |
 | `/api/cron/release-holds` | Daily sweep that releases unpaid holds (Vercel cron, needs `CRON_SECRET`) |
-| `/app/business` | Business profile: the owner's page link and the business details shown on it |
+| `/app/business` | Business profile: the owner's page link, pausing or resuming the page, and the business details shown on it |
 | `/app/account` | Account & security: change sign-in email or password, sign out everywhere, delete the account |
 | `/account/confirm-email/<token>` | Confirms a new sign-in email from the emailed link |
 | `/privacy`, `/terms` | Privacy notice and terms of service (linked from every footer, sign-up and the booking form) |

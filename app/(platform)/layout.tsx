@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { currentOwnerId } from "@/lib/auth";
 import { platform } from "@/lib/facility";
-import { getPublicOwners } from "@/lib/owners";
+import { getListedOwners } from "@/lib/owners";
 import Logo from "../logo";
 import MobileMenu from "./mobile-menu";
 
@@ -11,7 +11,7 @@ const desktopLink = "hidden whitespace-nowrap rounded-lg px-3 py-2 hover:bg-blac
 
 /** Reads who is signed in and whether any venue is listed yet, then draws the header links. */
 async function Nav() {
-  const [ownerId, owners] = await Promise.all([currentOwnerId(), getPublicOwners()]);
+  const [ownerId, owners] = await Promise.all([currentOwnerId(), getListedOwners()]);
   return <NavLinks signedIn={!!ownerId} hasVenues={owners.length > 0} />;
 }
 
