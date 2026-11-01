@@ -6,6 +6,7 @@ import { getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
 import { formatHourRange, formatMoney } from "@/lib/facility";
 import { releaseOverdueHolds } from "@/lib/holds";
+import { firstMonths, growth, monthSales } from "@/lib/sales";
 import { holdsSlot, listBookings, type Booking } from "@/lib/store";
 import { addDays, facilityNow, formatDate, startOfWeek } from "@/lib/time";
 import { Court, StatusBadge, bookable } from "./bookings-view";
@@ -13,6 +14,7 @@ import { BookingActions } from "./controls";
 import { CreateBooking } from "./create-booking";
 import { PageHeader } from "./page-header";
 import { staffHref, parseQuery } from "./query";
+import { Change, RevenueChart } from "./sales/revenue-chart";
 
 export const metadata = { title: "Staff — overview" };
 
@@ -64,6 +66,17 @@ async function Overview({ searchParams }: { searchParams: Promise<Record<string,
   const week = all.filter((b) => b.date >= weekStart && b.date <= addDays(weekStart, 6));
   const weekHours = week.filter(holdsSlot).reduce((n, b) => n + b.hours, 0);
   const weekRevenue = week.filter((b) => b.status === "confirmed").reduce((n, b) => n + b.total, 0);
+
+  // This year's sales by month, and the same stretch of last year to compare with.
+  const year = today.slice(0, 4);
+  const played = all.filter((b) => b.date <= today);
+  const first = firstMonths(played);
+  const yearMonths = Array.from({ length: 12 }, (_, i) => monthSales(played, `${year}-${String(i + 1).padStart(2, "0")}`, first));
+  const yearRevenue = yearMonths.reduce((n, s) => n + s.revenue, 0);
+  const lastYear = String(Number(year) - 1);
+  const lastYearRevenue = played
+    .filter((b) => b.status === "confirmed" && b.date >= `${lastYear}-01-01` && b.date <= `${lastYear}${today.slice(4)}`)
+    .reduce((n, b) => n + b.total, 0);
 
   return (
     <>
@@ -154,6 +167,28 @@ async function Overview({ searchParams }: { searchParams: Promise<Record<string,
           )}
         </section>
       </div>
+
+      <section className="mt-6 rounded-2xl border border-black/5 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+          <div>
+            <h2 className="font-semibold">Sales in {year}</h2>
+            <p className="text-sm text-black/50">
+              <span className="font-semibold text-black/80">{formatMoney(yearRevenue)}</span> so far
+              {lastYearRevenue > 0 && (
+                <>
+                  {" · "}
+                  <Change value={growth(yearRevenue, lastYearRevenue)} /> on {formatDate(`${lastYear}-01-01`, { weekday: undefined })}–
+                  {formatDate(`${lastYear}${today.slice(4)}`, { weekday: undefined, year: "numeric" })}
+                </>
+              )}
+            </p>
+          </div>
+          <Link href="/app/sales" className="text-sm font-medium text-emerald-700 hover:underline">
+            Open sales
+          </Link>
+        </div>
+        <RevenueChart trend={yearMonths} selected={today.slice(0, 7)} thisMonth={today.slice(0, 7)} />
+      </section>
     </>
   );
 }

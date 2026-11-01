@@ -9,6 +9,7 @@ type Item = { href: string; label: string; icon: string; badge?: "inbox" };
 // Stroke icons on a 24px grid.
 const icons = {
   home: "M3 11l9-8 9 8M5 10v10h14V10",
+  trend: "M3 17l6-6 4 4 8-8M15 7h6v6",
   inbox: "M3 13h5l2 3h4l2-3h5M5 5h14l2 8v6H3v-6z",
   calendar: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
   list: "M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1",
@@ -27,7 +28,13 @@ type Group = { label: string | null; items: Item[] };
 
 /** The partner dashboard at /app. */
 const partnerGroups: Group[] = [
-  { label: null, items: [{ href: "/app", label: "Overview", icon: icons.home }] },
+  {
+    label: null,
+    items: [
+      { href: "/app", label: "Overview", icon: icons.home },
+      { href: "/app/sales", label: "Sales", icon: icons.trend },
+    ],
+  },
   {
     label: "Bookings",
     items: [
