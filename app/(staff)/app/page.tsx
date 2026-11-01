@@ -5,9 +5,10 @@ import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
 import { formatHourRange, formatMoney } from "@/lib/facility";
+import { bookingFee } from "@/lib/fees";
 import { releaseOverdueHolds } from "@/lib/holds";
 import { firstMonths, growth, isSale, monthSales, revenueOf } from "@/lib/sales";
-import { holdsSlot, listBookings, type Booking } from "@/lib/store";
+import { holdsSlot, listBookings, readFeeSchedule, type Booking } from "@/lib/store";
 import { addDays, facilityNow, formatDate, startOfWeek } from "@/lib/time";
 import { Court, StatusBadge, bookable } from "./bookings-view";
 import { BookingActions } from "./controls";
@@ -53,7 +54,7 @@ async function Overview({ searchParams }: { searchParams: Promise<Record<string,
   }
 
   await releaseOverdueHolds(owner.id);
-  const [activities, all] = await Promise.all([getAllActivities(owner.id), listBookings({ ownerId: owner.id })]);
+  const [activities, all, fees] = await Promise.all([getAllActivities(owner.id), listBookings({ ownerId: owner.id }), readFeeSchedule()]);
   const activityBySlug = new Map(activities.map((a) => [a.slug, a]));
   const calendar = parseQuery({}, today, () => false, "calendar");
   const openHref = (b: Booking) => staffHref(calendar, today, { mode: "day", date: b.date, booking: b.id });
@@ -116,22 +117,25 @@ async function Overview({ searchParams }: { searchParams: Promise<Record<string,
             <p className="p-8 text-center text-sm text-black/50">You’re all caught up.</p>
           ) : (
             <ul className="divide-y divide-black/5">
-              {decisions.slice(0, 6).map((b) => (
-                <li key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 text-sm">
-                  <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
-                    <p className="flex items-center gap-2 font-medium">
-                      <Link href={openHref(b)} className="truncate hover:underline">
-                        {b.name}
-                      </Link>
-                      <StatusBadge status={b.status} blocked={b.blocked} />
-                    </p>
-                    <p className="truncate text-xs text-black/50">
-                      {formatDate(b.date)} · {formatHourRange(b.startHour, b.hours)} · <Court b={b} activity={activityBySlug.get(b.activitySlug)} />
-                    </p>
-                  </div>
-                  <BookingActions b={b} today={today} noDownpayment={!!activityBySlug.get(b.activitySlug)?.noDownpayment} />
-                </li>
-              ))}
+              {decisions.slice(0, 6).map((b) => {
+                const fee = bookingFee(fees, owner.id, b);
+                return (
+                  <li key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 text-sm">
+                    <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
+                      <p className="flex items-center gap-2 font-medium">
+                        <Link href={openHref(b)} className="truncate hover:underline">
+                          {b.name}
+                        </Link>
+                        <StatusBadge status={b.status} blocked={b.blocked} />
+                      </p>
+                      <p className="truncate text-xs text-black/50">
+                        {formatDate(b.date)} · {formatHourRange(b.startHour, b.hours)} · <Court b={b} activity={activityBySlug.get(b.activitySlug)} />
+                      </p>
+                    </div>
+                    <BookingActions b={b} today={today} noDownpayment={!!activityBySlug.get(b.activitySlug)?.noDownpayment} fee={fee} />
+                  </li>
+                );
+              })}
             </ul>
           )}
           {decisions.length > 6 && (

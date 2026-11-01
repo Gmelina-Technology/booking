@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import {
+  bookingFee,
   DEFAULT_RATE,
   feeFor,
   FLAT_FEES_FROM,
@@ -8,6 +9,7 @@ import {
   LEGACY_DEFAULT_RATE,
   monthlyStatement,
   nextRateChange,
+  partnerSchedule,
   resolveRate,
   type FeeRate,
   type FeeSchedule,
@@ -108,6 +110,31 @@ test("monthly statement charges each booking the flat fee", () => {
   expect(s.lines.map((l) => [l.booking.id, l.fee])).toEqual([["A", 15], ["B", 15], ["C", 15]]);
   expect(s.total).toBe(45);
   expect(s.upcoming).toBe(1);
+});
+
+test("a booking's fee is shown up front at its date's rate, never for blocks or cancellations", () => {
+  const schedule: FeeSchedule = { rates: [rate({ scope: "owner", ownerId: "o1", perBooking: 5, effectiveFrom: "2026-11-01", until: "2026-11-15" })] };
+  expect(bookingFee(schedule, "o1", booking({ status: "pending" }))).toBe(5);
+  expect(bookingFee(schedule, "o1", booking({ status: "awaiting_payment", date: "2026-11-20" }))).toBe(15);
+  expect(bookingFee(schedule, "o2", booking({ hours: 4 }))).toBe(15);
+  expect(bookingFee(schedule, "o1", booking({ status: "cancelled" }))).toBeNull();
+  expect(bookingFee(schedule, "o1", booking({ blocked: true }))).toBeNull();
+});
+
+test("the public widget only gets the partner's own rates, without admin notes", () => {
+  const schedule: FeeSchedule = {
+    rates: [
+      rate({ scope: "platform", perBooking: 20, effectiveFrom: "2026-12-01", note: "Holiday rate" }),
+      rate({ scope: "owner", ownerId: "o1", perBooking: 5, effectiveFrom: "2026-11-01", createdBy: "admin@example.test" }),
+      rate({ scope: "owner", ownerId: "o2", perBooking: 0, effectiveFrom: "2026-11-01" }),
+    ],
+  };
+  const mine = partnerSchedule(schedule, "o1");
+  expect(mine.rates.map((r) => r.ownerId ?? "platform")).toEqual(["platform", "o1"]);
+  expect(mine.rates.every((r) => !r.note && !r.createdBy)).toBe(true);
+  for (const date of ["2026-11-10", "2026-12-10"]) {
+    expect(bookingFee(mine, "o1", booking({ date }))).toBe(bookingFee(schedule, "o1", booking({ date })));
+  }
 });
 
 test("a month with no bookings costs nothing", () => {

@@ -6,6 +6,7 @@ import { requireOwner } from "@/lib/auth";
 import { bookingEmailContext, logBookingEmail } from "@/lib/booking-mail";
 import { cancelledEmail, confirmedEmail, paymentRequestEmail, paymentRetryEmail, rescheduledEmail } from "@/lib/emails";
 import { downpaymentFor, formatHourRange, paymentReady, type Activity } from "@/lib/facility";
+import { bookingFee } from "@/lib/fees";
 import { sendMail, type MailImage, type MailResult } from "@/lib/mailer";
 import { closedReason, priceFor } from "@/lib/schedule";
 import { siteUrl } from "@/lib/site-url";
@@ -14,6 +15,7 @@ import {
   holdsSlot,
   insertBooking,
   listBookings,
+  readFeeSchedule,
   readSettings,
   readUpload,
   SlotTaken,
@@ -67,7 +69,9 @@ async function sendPaymentRequest(owner: Owner, booking: Booking): Promise<MailR
 }
 
 function outcome(action: string, mail: MailResult): StaffResult {
-  return mail.ok ? { ok: true, message: `${action} ${mail.detail}.` } : { ok: false, message: `${action} but the email failed. ${mail.detail}` };
+  return mail.ok
+    ? { ok: true, message: `${action} ${mail.detail}.` }
+    : { ok: false, message: `${action} ${mail.detail}, so please contact the customer yourself.` };
 }
 
 /** Sends `mail` unless the customer has no email (walk-ins), and says what happened. */
@@ -424,7 +428,7 @@ export async function createStaffBooking(input: NewStaffBooking): Promise<StaffR
  */
 export async function editBooking(id: string, input: StaffBookingInput & { notify: boolean }): Promise<StaffResult> {
   const owner = await requireOwner();
-  const [activity, settings] = await Promise.all([getActivity(owner.id, input.activitySlug), readSettings(owner.id)]);
+  const [activity, settings, fees] = await Promise.all([getActivity(owner.id, input.activitySlug), readSettings(owner.id), readFeeSchedule()]);
   if (!activity) return { ok: false, message: "Pick an activity." };
 
   let before = "";
@@ -445,7 +449,9 @@ export async function editBooking(id: string, input: StaffBookingInput & { notif
       b.hours = input.hours;
       b.rescheduledAt = new Date().toISOString();
       if (!blocked) {
-        b.total = priceFor(activity, input.date, input.startHour, input.hours);
+        // A customer who pays the booking fee pays the rate for the new date.
+        if (b.bookingFee !== undefined) b.bookingFee = bookingFee(fees, owner.id, b) ?? 0;
+        b.total = priceFor(activity, input.date, input.startHour, input.hours) + (b.bookingFee ?? 0);
         // Not paid yet: the downpayment follows the new total. Already paid: it stays as received.
         if (b.status === "awaiting_payment" && !b.paymentRef && b.downpayment)
           b.downpayment = downpaymentFor(b.total, settings.downpaymentPercent);

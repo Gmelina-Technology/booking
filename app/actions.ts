@@ -7,6 +7,7 @@ import { clientIp } from "@/lib/auth";
 import { bookingEmailContext, logBookingEmail } from "@/lib/booking-mail";
 import { cancelledEmail, staffCustomerCancelledEmail, staffNewBookingEmail } from "@/lib/emails";
 import { paymentReady } from "@/lib/facility";
+import { bookingFee } from "@/lib/fees";
 import { releaseOverdueHolds } from "@/lib/holds";
 import { sendMail } from "@/lib/mailer";
 import { notify } from "@/lib/notifications";
@@ -20,6 +21,7 @@ import {
   holdsSlot,
   insertBooking,
   listBookings,
+  readFeeSchedule,
   readSettings,
   saveUpload,
   updateBooking,
@@ -121,6 +123,8 @@ export async function createBooking(input: {
   // An unpaid hold past its payment window shouldn't block this slot.
   await releaseOverdueHolds(owner.id, await listBookings({ ownerId: owner.id, activitySlug: activity.slug, date: input.date }));
 
+  // The customer pays the platform's booking fee on top of the price.
+  const fee = bookingFee(await readFeeSchedule(), owner.id, { date: input.date, hours, status: "pending" }) ?? 0;
   const booking = await insertBooking({
     ownerId: owner.id,
     activitySlug: activity.slug,
@@ -133,7 +137,8 @@ export async function createBooking(input: {
     phone,
     players,
     notes: input.notes.trim().slice(0, 500),
-    total: priceFor(activity, input.date, startHour, hours),
+    total: priceFor(activity, input.date, startHour, hours) + fee,
+    bookingFee: fee,
   });
   if (!booking) return { ok: false, error: "Sorry — someone just booked that slot. Please pick another time." };
 

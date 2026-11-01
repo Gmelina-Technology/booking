@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTra
 import { createBooking, getAvailability, type Availability } from "@/app/actions";
 import { toast } from "@/app/toaster";
 import { formatHour, formatHourRange, formatMoney, type PeakPricing, type Resource } from "@/lib/facility";
+import { bookingFee, type FeeSchedule } from "@/lib/fees";
 import { isPeakHour, priceFor } from "@/lib/schedule";
 import { bookableDates, facilityNow, formatDate } from "@/lib/time";
 
@@ -27,7 +28,18 @@ type Selection = { startHour: number; hours: number } | null;
 
 const noopSubscribe = () => () => {};
 
-export default function BookingWidget({ ownerId, activity, bookingWindowDays }: { ownerId: string; activity: ActivityInfo; bookingWindowDays: number }) {
+/** `fees`: this partner's booking fee rates (partnerSchedule), added on top of the price. */
+export default function BookingWidget({
+  ownerId,
+  activity,
+  bookingWindowDays,
+  fees,
+}: {
+  ownerId: string;
+  activity: ActivityInfo;
+  bookingWindowDays: number;
+  fees: FeeSchedule;
+}) {
   const router = useRouter();
   // Dates depend on the current time, so read "today" on the client only.
   const today = useSyncExternalStore(noopSubscribe, () => facilityNow().date, () => null);
@@ -108,7 +120,9 @@ export default function BookingWidget({ ownerId, activity, bookingWindowDays }: 
   }
 
   const resource = activity.resources.find((r) => r.id === resourceId)!;
-  const total = selection && date ? priceFor(activity, date, selection.startHour, selection.hours) : 0;
+  const price = selection && date ? priceFor(activity, date, selection.startHour, selection.hours) : 0;
+  const fee = selection && date ? (bookingFee(fees, ownerId, { date, hours: selection.hours, status: "pending" }) ?? 0) : 0;
+  const total = price + fee;
   const hasPeak = !!date && !!activity.peak && hours.some((h) => isPeakHour(activity, date, h));
   const canExtend =
     selection &&
@@ -221,7 +235,14 @@ export default function BookingWidget({ ownerId, activity, bookingWindowDays }: 
                     {formatDate(date, { weekday: "long", month: "long" })} · {formatHourRange(selection.startHour, selection.hours)}
                   </p>
                 </div>
-                <p className="text-xl font-bold text-emerald-900">{formatMoney(total)}</p>
+                <div className="text-right">
+                  <p className="text-xl font-bold text-emerald-900">{formatMoney(total)}</p>
+                  {fee > 0 && (
+                    <p className="text-xs text-emerald-900/70">
+                      {formatMoney(price)} + {formatMoney(fee)} booking fee
+                    </p>
+                  )}
+                </div>
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <span className="text-emerald-900/70">Duration:</span>

@@ -35,3 +35,11 @@ test("confirmation with no downpayment asks for the full total at the venue", ()
   expect(mail.text).not.toContain("downpayment");
   expect(mail.text).toMatch(/Pay at the front desk: .*800/);
 });
+
+test("the customer's booking fee is broken out above the total", () => {
+  const mail = confirmedEmail(ctx({ total: 815, bookingFee: 15, downpayment: 0 }));
+  expect(mail.text).toMatch(/Price: .*800/);
+  expect(mail.text).toMatch(/Booking fee: .*15/);
+  expect(mail.text).toMatch(/Total: .*815/);
+  expect(confirmedEmail(ctx({})).text).not.toContain("Booking fee");
+});

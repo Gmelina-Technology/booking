@@ -17,6 +17,12 @@ function details({ booking, activity }: Ctx) {
     ["Date", formatDate(booking.date, { weekday: "long", month: "long", year: "numeric" })],
     ["Time", formatHourRange(booking.startHour, booking.hours)],
     ["Players", String(booking.players)],
+    ...(booking.bookingFee
+      ? [
+          ["Price", formatMoney(booking.total - booking.bookingFee)],
+          ["Booking fee", formatMoney(booking.bookingFee)],
+        ]
+      : []),
     ["Total", formatMoney(booking.total)],
   ];
 }

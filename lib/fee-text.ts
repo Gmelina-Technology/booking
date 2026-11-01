@@ -2,7 +2,7 @@ import { formatMoney } from "./facility";
 import { isHourly, nextRateChange, resolveRate, type FeePricing, type FeeSchedule } from "./fees";
 import { formatDate } from "./time";
 
-/** "₱15 per booking" (or a legacy "₱10 per booked hour, max ₱50 per booking"). Partner and admin pages only; public pages never show rates. */
+/** "₱15 per booking" (or a legacy "₱10 per booked hour, max ₱50 per booking"). Partner and admin pages only: customers see a booking's fee, never the rate. */
 export function describeRate(r: FeePricing) {
   if (!isHourly(r)) return `${formatMoney(r.perBooking)} per booking`;
   const cap = r.capPerBooking === null ? ", no cap" : `, max ${formatMoney(r.capPerBooking)} per booking`;
