@@ -38,7 +38,7 @@ async function Confirm({ params }: { params: Promise<{ token: string }> }) {
       <>
         <h1 className="text-2xl font-bold tracking-tight">Link expired</h1>
         <p className="mt-2 text-sm text-black/60">This link has expired or was already used. Ask for a new one from Account & security in the staff menu.</p>
-        <Link href="/admin/account" className="mt-6 block text-center text-sm font-semibold text-emerald-700 hover:underline">
+        <Link href="/app/account" className="mt-6 block text-center text-sm font-semibold text-emerald-700 hover:underline">
           Go to Account
         </Link>
       </>

@@ -93,7 +93,7 @@ export async function requireOwner(): Promise<Owner> {
  * so a platform admin viewing as them is sent to the page that says so.
  */
 export async function requireAccountHolder(): Promise<Owner> {
-  if (await currentViewingAs()) redirect("/admin/account");
+  if (await currentViewingAs()) redirect("/app/account");
   return requireOwner();
 }
 
@@ -103,10 +103,17 @@ export async function clientIp(): Promise<string> {
   return h.get("x-forwarded-for")?.split(",")[0].trim() || h.get("x-real-ip") || "local";
 }
 
-/** Accounts listed in PLATFORM_ADMIN_EMAILS (comma-separated) run the platform itself, e.g. partner fee rates. */
+/** The addresses in PLATFORM_ADMIN_EMAILS (comma-separated), lowercase. */
+export function platformAdminEmails(): string[] {
+  return (process.env.PLATFORM_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** Accounts listed in PLATFORM_ADMIN_EMAILS run the platform itself, e.g. partner fee rates. */
 export function isPlatformAdmin(owner: Pick<Owner, "email">): boolean {
-  const emails = (process.env.PLATFORM_ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase());
-  return emails.includes(owner.email);
+  return platformAdminEmails().includes(owner.email);
 }
 
 /**

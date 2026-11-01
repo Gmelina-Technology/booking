@@ -37,7 +37,7 @@ async function LoginFormWithNext({ searchParams }: { searchParams: Promise<Recor
           You&apos;ve been signed out on all devices.
         </p>
       )}
-      <LoginForm next={typeof next === "string" ? next : "/admin"} />
+      <LoginForm next={typeof next === "string" ? next : "/app"} />
     </>
   );
 }

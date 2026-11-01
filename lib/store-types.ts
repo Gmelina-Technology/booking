@@ -68,6 +68,12 @@ export type Owner = {
   profile: BusinessProfile;
   /** When the partner agreed to the per-booking fee (lib/fees.ts). Missing on accounts from before fees. */
   feeTermsAcceptedAt?: string;
+  /**
+   * Set while a platform admin has suspended the partner: their page is off
+   * the directory, returns 404 and takes no new requests. They can still sign
+   * in and look after the bookings they already have.
+   */
+  suspension?: { at: string; by: string; reason: string };
 };
 
 /** What a staff notification is about (lib/notifications.ts). */
@@ -87,14 +93,35 @@ export type AppNotification = {
 
 export type BookingFilter = { ownerId: string; activitySlug?: string; date?: string; status?: BookingStatus };
 
+/** Platform admins only (/admin/all-bookings): bookings across every partner, by date range ("YYYY-MM-DD", inclusive). */
+export type PlatformBookingFilter = { ownerId?: string; from?: string; to?: string; status?: BookingStatus };
+
 /** The small JSON documents each owner has alongside their bookings. */
 export type DocKind = "activities" | "events" | "settings" | "hero" | "notifications";
 
 /** Documents shared by the whole platform rather than one owner. */
-export type PlatformDocKind = "fees" | "view-as-log";
+export type PlatformDocKind = "fees" | "view-as-log" | "partner-log" | "notifications";
 
 /** A platform admin starting or stopping "view as" for a partner, kept for accountability. */
 export type ViewAsLogEntry = { at: string; event: "start" | "stop"; adminEmail: string; ownerId: string; ownerHandle: string };
+
+/** A platform admin suspending or reinstating a partner, kept for accountability. */
+export type PartnerLogEntry = { at: string; event: "suspend" | "reinstate"; adminEmail: string; ownerId: string; ownerHandle: string; reason?: string };
+
+/** What a platform notification is about (lib/platform-notifications.ts). */
+export type PlatformNotificationKind = "partner_joined";
+
+/** One entry in a platform admin's notification bell. Shared by every admin, each with their own read state. */
+export type PlatformNotification = {
+  id: string;
+  kind: PlatformNotificationKind;
+  ownerId: string;
+  title: string;
+  body: string;
+  at: string;
+  /** Ids of the admins who have read it. */
+  readBy: string[];
+};
 
 export type LoginFailure = { count: number; untilMs: number };
 
@@ -116,6 +143,8 @@ export interface StoreBackend {
   deleteOwner(id: string): Promise<void>;
 
   listBookings(filter: BookingFilter): Promise<Booking[]>;
+  /** Every partner's bookings in the filter, by date and start hour. Platform admins only. */
+  listPlatformBookings(filter: PlatformBookingFilter): Promise<Booking[]>;
   findBooking(by: "id" | "accessToken", value: string): Promise<Booking | undefined>;
   /** Inserts the booking, or returns false if it overlaps an active booking on the same court. */
   insertBooking(booking: Booking): Promise<boolean>;

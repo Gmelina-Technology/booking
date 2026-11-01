@@ -48,6 +48,20 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  // The partner dashboard moved from /admin to /app, and /admin is now the
+  // platform admin area. Old bookmarks and emailed links keep working (the
+  // query string is passed on). Bare /admin is handled by admin/page.tsx.
+  // Temporary, so these paths stay free for platform pages later.
+  async redirects() {
+    return [
+      {
+        source: "/admin/:section(inbox|calendar|bookings|activities|events|banner|business|settings|billing|account)/:rest*",
+        destination: "/app/:section/:rest*",
+        permanent: false,
+      },
+      { source: "/admin/platform-fees", destination: "/admin/fees", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

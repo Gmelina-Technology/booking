@@ -1,6 +1,6 @@
 import { formatHourRange, formatMoney, platform, type Activity, type BusinessProfile, type PaymentSettings } from "./facility";
 import type { Mail, MailImage } from "./mailer";
-import type { Booking } from "./store";
+import type { Booking, Owner } from "./store";
 import { formatDate } from "./time";
 
 export function esc(s: string) {
@@ -246,6 +246,57 @@ ${button(link, "Use this email")}
 <p>The link works once, for ${minutes} minutes. If you didn't ask for this, ignore this email and nothing changes.</p>`,
     ),
     text: `Confirm your new ${platform.name} sign-in email: ${link}\n\nThe link works once, for ${minutes} minutes. If you didn't ask for this, ignore this email and nothing changes.\n`,
+  };
+}
+
+/** To each platform admin when a partner finishes signing up. */
+export function partnerJoinedEmail(to: string, owner: Owner, link: string): Mail {
+  const rows = [
+    ["Business", owner.profile.name],
+    ["Page", `@${owner.handle}`],
+    ["Sign-in email", owner.email],
+  ];
+  return {
+    to,
+    subject: `New partner on ${platform.name}: ${owner.profile.name}`,
+    html: layout(
+      platformBrand(),
+      "A new partner just joined",
+      "#1d4ed8",
+      `<p>${esc(owner.profile.name)} verified their email and created their booking page.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px">
+${rows
+  .map(
+    ([k, v]) =>
+      `<tr><td style="padding:8px 0;color:#6b7280;border-bottom:1px solid #eef0ec">${esc(k)}</td><td style="padding:8px 0;text-align:right;font-weight:600;border-bottom:1px solid #eef0ec">${esc(v)}</td></tr>`,
+  )
+  .join("\n")}
+</table>
+${button(link, "Open in Partners")}
+<p style="font-size:13px;color:#6b7280">You get this because your account is a platform admin.</p>`,
+    ),
+    text: `${owner.profile.name} just joined ${platform.name}.\n\n${rows.map(([k, v]) => `${k}: ${v}`).join("\n")}\n\nOpen in Partners: ${link}\n`,
+  };
+}
+
+/** To a partner when a platform admin suspends their page (`reason`) or puts it back online (null). */
+export function partnerStatusEmail(to: string, business: string, reason: string | null): Mail {
+  const heading = reason ? "Your booking page is suspended" : "Your booking page is back online";
+  const support = platform.supportEmail;
+  const message = reason
+    ? [
+        `${platform.name} has suspended the booking page for ${business}. Customers can't open it or send new requests until it's reinstated.`,
+        `Reason: ${reason}`,
+        "You can still sign in and look after the bookings you already have.",
+        support ? `Questions? Contact us at ${support}.` : "Questions? Reply to this email.",
+      ]
+    : [`The booking page for ${business} is back online. Customers can find it and send booking requests again.`];
+  return {
+    to,
+    replyTo: support || undefined,
+    subject: `${heading} · ${platform.name}`,
+    html: layout(platformBrand(), heading, reason ? "#b91c1c" : "#047857", message.map((p) => `<p>${esc(p)}</p>`).join("\n")),
+    text: `${heading}\n\n${message.join("\n\n")}\n`,
   };
 }
 

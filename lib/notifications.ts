@@ -5,7 +5,7 @@ import { readNotifications, updateNotifications, type Booking } from "./store";
 import type { AppNotification, NotificationKind } from "./store-types";
 import { formatDate } from "./time";
 
-// In-app notifications for staff: the bell in the staff header (admin/notifications.tsx).
+// In-app notifications for staff: the bell in the staff header (app/notifications.tsx).
 // Each owner keeps their most recent MAX_KEPT in one document; older ones drop off.
 // Raised when a customer requests a booking or enters a payment reference, and
 // when a hold is released automatically (lib/holds.ts).

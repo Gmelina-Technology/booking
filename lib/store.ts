@@ -10,16 +10,28 @@ import { emptySchedule, type FeeSchedule } from "./fees";
 import { defaultHeroDoc, type HeroDoc } from "./hero";
 import { fileStore } from "./store-file";
 import { databaseUrl, postgresStore } from "./store-postgres";
-import type { AppNotification, Booking, BookingFilter, InsertOwnerResult, Owner, StoreBackend, ViewAsLogEntry } from "./store-types";
+import type {
+  AppNotification,
+  Booking,
+  BookingFilter,
+  InsertOwnerResult,
+  Owner,
+  PartnerLogEntry,
+  PlatformBookingFilter,
+  PlatformNotification,
+  StoreBackend,
+  ViewAsLogEntry,
+} from "./store-types";
 
 // The app's only way to read and write data. Picks a backend:
 //   - Postgres when DATABASE_URL / POSTGRES_URL is set (required on Vercel)
 //   - JSON files in ./data otherwise (local development, zero setup)
 //
 // Everything except accounts and booking-link lookups is scoped to one owner,
-// so one business can never read or change another's data.
+// so one business can never read or change another's data. The exception,
+// listPlatformBookings(), is only for platform admin pages.
 
-export type { Booking, BookingStatus, EmailKind, EmailLogEntry, Owner, ViewAsLogEntry } from "./store-types";
+export type { Booking, BookingStatus, EmailKind, EmailLogEntry, Owner, PartnerLogEntry, PlatformNotification, ViewAsLogEntry } from "./store-types";
 export { deleteUpload, isUploadName, readUpload, saveUpload, UPLOAD_TYPES } from "./uploads";
 
 function backend(): StoreBackend {
@@ -66,7 +78,7 @@ export function updateOwner(id: string, change: (o: Owner) => void) {
   return backend().updateOwner(id, change);
 }
 
-/** Deletes the account, its bookings and its documents. Delete its uploads first (see (staff)/admin/account/actions.ts). */
+/** Deletes the account, its bookings and its documents. Delete its uploads first (see (staff)/app/account/actions.ts). */
 export function deleteOwner(id: string) {
   return backend().deleteOwner(id);
 }
@@ -75,6 +87,11 @@ export function deleteOwner(id: string) {
 
 export function listBookings(filter: BookingFilter) {
   return backend().listBookings(filter);
+}
+
+/** Every partner's bookings. Only for platform admin pages, which call requirePlatformAdmin() first. */
+export function listPlatformBookings(filter: PlatformBookingFilter = {}) {
+  return backend().listPlatformBookings(filter);
 }
 
 /** Looks a booking up by its confirmation-link token, never by its short reference. */
@@ -239,6 +256,34 @@ export function logViewAs(entry: ViewAsLogEntry): Promise<void> {
     doc: [entry, ...all].slice(0, VIEW_AS_LOG_SIZE),
     result: undefined,
   }));
+}
+
+// ---- Platform admins suspending and reinstating partners -------------------
+// Newest first, the latest PARTNER_LOG_SIZE kept.
+
+const PARTNER_LOG_SIZE = 200;
+
+export function readPartnerLog(): Promise<PartnerLogEntry[]> {
+  return backend().readPlatformDoc<PartnerLogEntry[]>("partner-log", []);
+}
+
+export function logPartnerChange(entry: PartnerLogEntry): Promise<void> {
+  return backend().updatePlatformDoc<PartnerLogEntry[], void>("partner-log", [], (all) => ({
+    doc: [entry, ...all].slice(0, PARTNER_LOG_SIZE),
+    result: undefined,
+  }));
+}
+
+// ---- Platform admin notifications -----------------------------------------
+// Newest first. lib/platform-notifications.ts decides what goes in and how many are kept.
+
+export function readPlatformNotifications(): Promise<PlatformNotification[]> {
+  return backend().readPlatformDoc<PlatformNotification[]>("notifications", []);
+}
+
+/** Atomic read-modify-write of the platform notifications. */
+export function updatePlatformNotifications(change: (all: PlatformNotification[]) => PlatformNotification[]): Promise<void> {
+  return backend().updatePlatformDoc<PlatformNotification[], void>("notifications", [], (all) => ({ doc: change(all), result: undefined }));
 }
 
 // ---- Login rate limiting --------------------------------------------------

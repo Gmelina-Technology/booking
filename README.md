@@ -23,7 +23,7 @@ Checks (the same ones CI runs on every pull request, in `.github/workflows/ci.ym
 ```bash
 npm run lint
 npx next typegen && npx tsc --noEmit
-npm test        # Vitest: sessions, passwords, reset links, bookings, holds, rate limits, fees, sales
+npm test        # Vitest: sessions, passwords, reset links, bookings, holds, rate limits, fees, platform admin, sales
 npm run build
 ```
 
@@ -55,7 +55,7 @@ settings.
 - **Sign in** at `/login` with email and password. Passwords are hashed with scrypt. Sessions last
   7 days in an HTTP-only cookie signed with `SESSION_SECRET`. Changing that secret signs everyone
   out. Use **Sign out** at the top right of the staff area to end the session on that browser.
-- **Account & security** (`/admin/account`): every change here asks for the current password (5 tries per
+- **Account & security** (`/app/account`): every change here asks for the current password (5 tries per
   15 minutes).
   - **Change password.** Signs out every other device and emails the owner a notice.
   - **Change sign-in email.** We email a link to the new address (`lib/email-change.ts`), and the
@@ -69,9 +69,14 @@ settings.
   after a lost phone. Each session carries the account's session version, and `currentOwner()`
   (`lib/auth.ts`) rejects any session older than the version stored on the account. Resetting the
   password raises the version too.
-- **Staff area** at `/admin` (the same URL for everyone) shows the signed-in owner's data. Its
+- **Partner dashboard** at `/app` (the same URL for every partner) shows the signed-in owner's data. Its
   menu groups bookings, catalog, the public page and settings. **Business profile** edits the name, tagline, address, phone and contact email shown on their page
   and in emails.
+- **Platform admin area** at `/admin`, for platform users only (`PLATFORM_ADMIN_EMAILS`, see
+  [Platform admin](#platform-admin)): partners, every partner's bookings, and fee rates. Platform admins also have a partner account, so their dashboard
+  menu links to it. Anyone else gets a 404 on its pages, and a partner opening `/admin` itself is
+  sent to `/app`. Old `/admin/<page>` links from before the dashboard moved redirect to `/app/<page>`
+  (`redirects()` in `next.config.ts`).
 - **New accounts** start with the sample activities from `defaultActivities` (edit or hide them),
   no events, and new-booking alerts sent to their sign-up email.
 - **Forgot password** at `/reset-password` (linked from sign-in). We email a link that works once,
@@ -81,8 +86,8 @@ settings.
   One IP can ask for 5 links an hour, and one email 3. A reset signs the account out on every other
   device.
 - **Brute-force protection:** 5 wrong passwords from one IP locks that IP out for 15 minutes.
-- **How it's enforced:** `proxy.ts` redirects signed-out visitors away from `/admin/*`. Every
-  staff server action and admin data loader also calls `requireOwner()` (`lib/auth.ts`) and scopes
+- **How it's enforced:** `proxy.ts` redirects signed-out visitors away from `/app/*` and `/admin/*`. Every
+  staff server action and dashboard data loader also calls `requireOwner()` (`lib/auth.ts`) and scopes
   every read and write to that owner, because server actions can be called directly without
   visiting the page. Booking changes also check that the booking belongs to the signed-in owner.
 - If `SESSION_SECRET` is missing, nobody can sign up or sign in. Login fails closed.
@@ -110,7 +115,8 @@ requests, payment references customers enter, and holds released automatically, 
 count. Clicking one opens that booking. It checks for new ones every 30 seconds while the tab is
 open, and staff can turn on **desktop alerts** from the bell to get a browser notification as well
 (per browser, and only while a staff page is open). The latest 50 are kept per business, in the
-owner's `notifications` document.
+owner's `notifications` document. Platform admins also see the platform's notifications (new partners) in the
+same bell, marked **Platform** (see [New partner alerts](#new-partner-alerts)).
 
 **Holds are released automatically** (`lib/holds.ts`). The booking is cancelled, the slot is freed
 and the customer is emailed when:
@@ -133,7 +139,7 @@ smaller screens have the same copy button).
 
 ## Sales
 
-**Sales** (`/admin/sales`) shows each partner how their business is growing. The calculations are
+**Sales** (`/app/sales`) shows each partner how their business is growing. The calculations are
 in [`lib/sales.ts`](lib/sales.ts).
 
 - **Revenue** is the total of confirmed bookings, counted on the day they're played. Pending,
@@ -156,9 +162,9 @@ most ₱50 per booking). Cancelled bookings and quiet months cost nothing. The c
 [`lib/fees.ts`](lib/fees.ts).
 
 - **Platform admins** (accounts whose email is in `PLATFORM_ADMIN_EMAILS`, comma-separated) set the
-  platform rate and per-partner promo rates at `/admin/platform-fees`, with a preview and change
+  platform rate and per-partner promo rates at `/admin/fees`, with a preview and change
   history. A new rate starts tomorrow at the earliest, so a fee already charged never changes.
-- **Partners** see their current rate and a monthly statement at `/admin/billing`. Sign-up asks
+- **Partners** see their current rate and a monthly statement at `/app/billing`. Sign-up asks
   them to agree to the current rate, and older accounts accept the fee terms on that page.
 - **The public `/pricing` page** describes the partnership but never states the fee. Partners only
   see their exact rate when signing up and on Billing.
@@ -166,8 +172,8 @@ most ₱50 per booking). Cancelled bookings and quiet months cost nothing. The c
 ### Viewing as a partner
 
 Platform admins can open any partner's staff area as that partner, for example to help with
-support: **Partners** (`/admin/partners`) lists every business, and **View as** switches the staff
-area to theirs. An amber bar on every staff page names the partner, says when it ends, and has
+support: **Partners** (`/admin/partners`) lists every business, and **View as** opens the partner
+dashboard (`/app`) as theirs. An amber bar on every staff page names the partner, says when it ends, and has
 **Stop viewing as**.
 
 - The admin's own session stays as it is. The partner is held in a second signed cookie
@@ -183,7 +189,7 @@ area to theirs. An amber bar on every staff page names the partner, says when it
 
 ### Payment & email setup
 
-1. Sign in and open **Payments & alerts** (`/admin/settings`). Upload your GCash/Maya **Receive money QR**,
+1. Sign in and open **Payments & alerts** (`/app/settings`). Upload your GCash/Maya **Receive money QR**,
    and set the account name and number, downpayment %, payment window, and the staff alert email.
 2. Set the `SMTP_*` variables and `SITE_URL` (see `.env.example`). Use **Send test email** on the
    Settings page to check delivery. Until `SMTP_HOST` is set, emails are saved as HTML files in
@@ -191,6 +197,60 @@ area to theirs. An amber bar on every staff page names the partner, says when it
 
 Every email sent is logged on the booking. A failed send shows in red in the staff view, and
 **Resend email** retries the payment request.
+
+## Platform admin
+
+Accounts whose email is in `PLATFORM_ADMIN_EMAILS` run the platform from `/admin`: partner fee rates
+and [viewing as a partner](#viewing-as-a-partner) (above), plus the alerts and pages below. Each of these
+pages and actions calls `requirePlatformAdmin()`; anyone else gets a 404.
+
+### New partner alerts
+
+When a new partner finishes signing up (after their email code), every platform admin is told
+(`lib/platform-notifications.ts`):
+
+- **In the bell:** "New partner: <business>" with their handle and email, marked **Platform**. Clicking
+  it opens the partner on `/admin/partners/<id>`. Notifications are shared by all admins (the latest
+  100), and each admin has their own read state.
+- **By email** to each address in `PLATFORM_ADMIN_EMAILS`, with a link to the partner. An admin
+  signing up their own business isn't emailed about it. Both are sent after the sign-up response, so
+  a slow mail server never holds up the new partner.
+
+### All bookings
+
+`/admin/all-bookings` lists every partner's bookings in one place, for keeping an eye on how partners
+are doing:
+
+- Filter by period (upcoming, today, last 30 days, a month, all time), partner, status, and a search
+  over reference, customer name, email and phone. Filters live in the URL, so a view can be shared.
+- Totals for the view, and a **By partner** table that puts partners with slow responses first.
+- Bookings waiting on their partner for more than 24 hours (a request not approved or declined, or a
+  payment reference not checked) are flagged **waiting** (`STALE_HOURS` in `lib/platform-stats.ts`).
+  Bookings staff added themselves never count as waiting.
+- The page is read-only. **Open** views as the partner, landing on that booking.
+- It shows the first 300 bookings of a view; narrow the filters for the rest.
+
+The path isn't `/admin/bookings` because that still redirects partners' old links to `/app/bookings`.
+
+### Managing partners
+
+`/admin/partners` lists every partner, newest first, with their upcoming and recent bookings, bookings
+waiting too long, and setup progress. Search by name, handle, email or phone, or filter to new partners
+(30 days), incomplete setup, slow to respond, or suspended. **Manage** opens a partner's page
+(`/admin/partners/<id>`): their details, fee rate, a setup checklist (payment QR, account details,
+contact phone, an open activity, a first booking), their latest bookings, and admin activity on their
+account.
+
+**Suspending a partner** takes their page offline, for example after complaints. The admin gives a
+reason, which the partner sees:
+
+- Their page returns 404, they leave the directory, and new booking requests are refused
+  (`getPublicOwners()` in `lib/owners.ts`, and `createBooking()`).
+- They can still sign in and look after the bookings they already have. A red notice in their staff
+  area gives the reason. Existing customers' booking links keep working.
+- The partner is emailed when suspended and when reinstated (**Reinstate page** on the same screen).
+- Platform admin accounts can't be suspended. Every suspension and reinstatement is logged (the latest
+  200) and shown with the view-as log under **Recent admin activity**.
 
 ## Pages
 
@@ -205,34 +265,38 @@ Every email sent is logged on the booking. A failed send shows in red in the sta
 | `/login` | Owner sign-in |
 | `/reset-password` | Forgot password: emails a one-time link to `/reset-password/<token>` |
 | `/api/cron/release-holds` | Daily sweep that releases unpaid holds (Vercel cron, needs `CRON_SECRET`) |
-| `/admin/business` | Business profile: the owner's page link and the business details shown on it |
-| `/admin/account` | Account & security: change sign-in email or password, sign out everywhere, delete the account |
+| `/app/business` | Business profile: the owner's page link and the business details shown on it |
+| `/app/account` | Account & security: change sign-in email or password, sign out everywhere, delete the account |
 | `/account/confirm-email/<token>` | Confirms a new sign-in email from the emailed link |
 | `/privacy`, `/terms` | Privacy notice and terms of service (linked from every footer, sign-up and the booking form) |
-| `/admin` | Staff overview: what needs a decision, today's schedule, this week's totals |
-| `/admin/sales` | Sales: revenue, bookings and customers by month, compared with the month before |
-| `/admin/inbox` | New requests, payments to verify, and approved bookings awaiting payment |
-| `/admin/calendar` | Month, week and day calendar of bookings |
-| `/admin/bookings` | All bookings by status, plus the day-by-day schedule |
-| `/admin/settings` | Payments & alerts: downpayment %, payment QR, account details, staff alert email, test email |
-| `/admin/billing` | The partner's fee rate and monthly statement |
-| `/admin/platform-fees` | Platform admins only: platform and promo fee rates |
-| `/admin/partners` | Platform admins only: every partner, **View as** a partner, and the view-as log |
-| `/admin/activities` | Staff view: add, edit, reorder, hide or delete activities |
-| `/admin/events` | Staff view: past events (with photos) shown on the business page |
-| `/admin/banner` | Page design: the business page banner's template, text, photos, colours and buttons, with a live preview |
+| `/app` | Staff overview: what needs a decision, today's schedule, this week's totals, this year's sales by month |
+| `/app/sales` | Sales: revenue, bookings and customers by month, compared with the month before |
+| `/app/inbox` | New requests, payments to verify, and approved bookings awaiting payment |
+| `/app/calendar` | Month, week and day calendar of bookings |
+| `/app/bookings` | All bookings by status, plus the day-by-day schedule |
+| `/app/settings` | Payments & alerts: downpayment %, payment QR, account details, staff alert email, test email |
+| `/app/billing` | The partner's fee rate and monthly statement |
+| `/app/activities` | Staff view: add, edit, reorder, hide or delete activities |
+| `/app/events` | Staff view: past events (with photos) shown on the business page |
+| `/app/banner` | Page design: the business page banner's template, text, photos, colours and buttons, with a live preview |
+| `/admin` | Platform admins only: the platform admin area (opens Partners). Partners who open it are sent to `/app` |
+| `/admin/partners` | Platform admins only: every partner with their activity and setup, search and filters, **View as**, and the admin activity log |
+| `/admin/partners/<id>` | Platform admins only: one partner's details, setup, latest bookings and history; suspend or reinstate their page |
+| `/admin/all-bookings` | Platform admins only: every partner's bookings, with filters, totals and bookings waiting too long |
+| `/admin/fees` | Platform admins only: platform and promo fee rates |
 
-The route folders are `app/(platform)/` (platform header and footer) and `app/p/[handle]/` (the
-business's own header and footer). The `@` in `/p/@handle` is optional when typed, so
+The route folders are `app/(platform)/` (platform header and footer), `app/p/[handle]/` (the
+business's own header and footer), and `app/(staff)/` (the signed-in header), which holds the partner
+dashboard in `app/(staff)/app/` and the platform admin area in `app/(staff)/admin/`. The `@` in `/p/@handle` is optional when typed, so
 `/p/courtside-hub` works too.
 
 ## Customize
 
 The platform name, time zone, currency and booking window are in `platform` in
 [`lib/facility.ts`](lib/facility.ts), shared by every business. Each business's name, address and
-contact details are edited by its owner at `/admin/business`.
+contact details are edited by its owner at `/app/business`.
 
-Staff design their page banner at `/admin/banner`. They pick one of four templates (**Collage**,
+Staff design their page banner at `/app/banner`. They pick one of four templates (**Collage**,
 **Spotlight**, **Split**, **Minimal**), where the text sits, the headline, label and description
 (`{name}` in the headline becomes the business name in the highlight colour), background and
 highlight colours, photo tint and crop focus, and the buttons' style, corners, size, wording and
@@ -240,7 +304,7 @@ destination. Banner photos are uploaded into a per-owner library of up to 12. Up
 and ordered, and the rest of the banner is filled with event and stock photos. The preview shows the
 desktop and phone layouts. Changes go live only after **Save banner**.
 
-Staff manage activities at `/admin/activities`. For each one they can set the name, icon, card
+Staff manage activities at `/app/activities`. For each one they can set the name, icon, card
 colour, description, price per hour, opening hours, maximum booking length, maximum players, the
 list of courts or tables, and what's included. They can also hide it from customers or reorder it.
 A few rules protect existing bookings:
@@ -254,7 +318,7 @@ A few rules protect existing bookings:
 the owner saves their first change.
 
 Each business page has a **Recent events** section showing tournaments, clinics and private events the
-facility has hosted. Staff manage these at `/admin/events`, with a photo, date, activity, short
+facility has hosted. Staff manage these at `/app/events`, with a photo, date, activity, short
 write-up and number of players. The section hides itself when there are no published events.
 Photos are shrunk in the browser (at most 1600px, about 900 KB) before upload. They are stored in
 `data/uploads/` and served at `/uploads/<file>`.
@@ -322,16 +386,16 @@ information controller), and the platform processes them for it.
 - **Set `SESSION_SECRET`** on the host (see `.env.example`), and serve the site over HTTPS so the
   session cookie is only sent encrypted.
 - **Sign-up is open to anyone with a real email.** Emails are verified with a one-time code and
-  code requests are rate-limited, but there's no CAPTCHA, and platform admins can manage fee rates
-  and view as a partner but can't suspend or remove accounts. Add those before inviting the public.
-- **Set `PLATFORM_ADMIN_EMAILS`** to the accounts that may change partner fee rates and view as any
-  partner.
+  code requests are rate-limited, but there's no CAPTCHA, and platform admins can suspend a
+  partner's page but can't delete accounts. Add those before inviting the public.
+- **Set `PLATFORM_ADMIN_EMAILS`** to the accounts that may change partner fee rates, view as and
+  suspend any partner, and see every booking. They also get an email for each new partner.
 - **Set up SMTP before opening sign-up.** Without it, verification codes can't be sent on Vercel
   and nobody can sign up.
 - **Fill in the legal details and review the wording.** Set `operator`, `privacyEmail` and
   `legalUpdated` in `platform` (`lib/facility.ts`). They're placeholders now. Have the privacy
   notice and terms checked for your business, including which providers you actually use.
-- **Replace sample events.** Events marked "Sample — replace me" in `/admin/events` (from older
+- **Replace sample events.** Events marked "Sample — replace me" in `/app/events` (from older
   installs) are placeholders. Swap in real events, or delete them.
 - **Connect Postgres and Blob** in production (see [Deploy to Vercel](#deploy-to-vercel)). The JSON
   files are for local development only.
