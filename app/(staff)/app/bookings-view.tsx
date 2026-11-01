@@ -6,13 +6,15 @@ import { requireOwner } from "@/lib/auth";
 import { formatHourRange, formatMoney, platform, type Activity } from "@/lib/facility";
 import { releaseOverdueHolds } from "@/lib/holds";
 import { isSale, revenueOf } from "@/lib/sales";
+import { pageOf } from "@/lib/paging";
 import { holdsSlot, listBookings, readSettings, type Booking } from "@/lib/store";
 import { addDays, addMonths, endOfMonth, facilityNow, formatDate, isoWeek, startOfMonth, startOfWeek } from "@/lib/time";
+import { Pager } from "../pager";
 import { DayStrip, DayTimeline, Legend, MonthGrid, WeekGrid, hourRange, type Column } from "./calendar";
 import { ApproveAll, BookingActions, CopyReference, DayPicker, EraseCustomerButton, ModeSelect, Toolbar } from "./controls";
 import { CreateBooking, EditBooking, type BookableActivity } from "./create-booking";
 import { PageHeader } from "./page-header";
-import { matchesSearch, pageOf, staffHref, parseQuery, sectionOf, type StaffQuery, type Section, type ViewKey } from "./query";
+import { matchesSearch, staffHref, parseQuery, sectionOf, type StaffQuery, type Section, type ViewKey } from "./query";
 import { PageBanners } from "./page-banners";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -404,41 +406,11 @@ function TableView({
                 ))}
               </tbody>
             </table>
-            {paged.pages > 1 && <Pager {...paged} total={rows.length} href={(page) => staffHref(q, today, { page })} />}
+            <Pager {...paged} href={(page) => staffHref(q, today, { page })} />
           </>
         )}
       </div>
     </>
-  );
-}
-
-function Pager({ page, pages, from, to, total, href }: { page: number; pages: number; from: number; to: number; total: number; href: (page: number) => string }) {
-  const btn = "px-3 py-2 text-sm font-medium";
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/5 px-4 py-3">
-      <p className="text-sm text-black/50">
-        {from}–{to} of {total}
-      </p>
-      <nav className="flex divide-x divide-black/10 overflow-hidden rounded-lg border border-black/10" aria-label="Pages">
-        {page > 1 ? (
-          <Link href={href(page - 1)} className={`${btn} hover:bg-black/[0.03]`}>
-            ‹ Prev
-          </Link>
-        ) : (
-          <span className={`${btn} text-black/30`}>‹ Prev</span>
-        )}
-        <span className={`${btn} text-black/50`} aria-current="page">
-          Page {page} of {pages}
-        </span>
-        {page < pages ? (
-          <Link href={href(page + 1)} className={`${btn} hover:bg-black/[0.03]`}>
-            Next ›
-          </Link>
-        ) : (
-          <span className={`${btn} text-black/30`}>Next ›</span>
-        )}
-      </nav>
-    </div>
   );
 }
 

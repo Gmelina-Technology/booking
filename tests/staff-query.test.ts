@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { pageOf, parseQuery, staffHref } from "@/app/(staff)/app/query";
+import { parseQuery, staffHref } from "@/app/(staff)/app/query";
+import { pageOf, pageWindow } from "@/lib/paging";
 
 const TODAY = "2030-01-14";
 const parse = (sp: Record<string, string>) => parseQuery(sp, TODAY, () => true, "bookings");
@@ -30,5 +31,13 @@ describe("table pages", () => {
   it("leaves the page off calendar links", () => {
     const q = parse({ page: "2" });
     expect(staffHref(q, TODAY, { mode: "week" })).toBe("/app/calendar?mode=week");
+  });
+});
+
+describe("pages of a list in the database", () => {
+  it("works out the offset from the total, clamping like pageOf()", () => {
+    expect(pageWindow(120, 2)).toEqual({ page: 2, pages: 3, from: 51, to: 100, total: 120, offset: 50 });
+    expect(pageWindow(120, 7)).toMatchObject({ page: 3, offset: 100, to: 120 });
+    expect(pageWindow(0, 3)).toMatchObject({ page: 1, pages: 1, offset: 0, total: 0 });
   });
 });

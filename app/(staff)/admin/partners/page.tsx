@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { getAllActivities } from "@/lib/activities";
 import { currentViewingAs, requirePlatformAdmin } from "@/lib/auth";
 import { formatMoney, platform } from "@/lib/facility";
 import { ownerPath } from "@/lib/owners";
-import { byOwner, isNewPartner, partnerStats, setupChecks, STALE_HOURS } from "@/lib/platform-stats";
+import { pageOf, parsePage } from "@/lib/paging";
+import { isNewPartner, partnerStats, setupChecks, STALE_HOURS } from "@/lib/platform-stats";
 import { VIEW_AS_MINUTES } from "@/lib/session";
-import { listOwners, listPlatformBookings, readPartnerLog, readSettings, readViewAsLog } from "@/lib/store";
+import { listOwners, readAllActivities, readAllSettings, readPartnerLog, readViewAsLog, summarizePlatformBookings } from "@/lib/store";
 import { facilityNow } from "@/lib/time";
+import { Pager } from "../../pager";
 import { Badges, SetupMeter, Stat, ViewAsButton } from "../ui";
 
 export const metadata = { title: "Platform — partners" };
@@ -45,24 +46,25 @@ async function Partners({ searchParams }: { searchParams: Promise<Record<string,
   const sp = await searchParams;
   await connection();
   const admin = await requirePlatformAdmin();
-  const [owners, bookings, viewAsLog, partnerLog, viewing] = await Promise.all([
+  const today = facilityNow().date;
+  const [owners, summary, viewAsLog, partnerLog, viewing] = await Promise.all([
     listOwners(),
-    listPlatformBookings(),
+    summarizePlatformBookings({}, today),
     readViewAsLog(),
     readPartnerLog(),
     currentViewingAs(),
   ]);
-  const today = facilityNow().date;
-  const grouped = byOwner(bookings);
+  // The filter counts need every partner's setup, so their settings and
+  // activities come in one read each rather than two reads per partner.
+  const ids = owners.map((o) => o.id);
+  const [settings, activities] = await Promise.all([readAllSettings(ids), readAllActivities(ids)]);
+  const statsByOwner = new Map(summary.map((s) => [s.ownerId, s]));
 
-  const rows = await Promise.all(
-    owners.map(async (o) => {
-      const stats = partnerStats(grouped.get(o.id) ?? [], today);
-      const [settings, activities] = await Promise.all([readSettings(o.id), getAllActivities(o.id)]);
-      const checks = setupChecks(o, settings, activities, stats);
-      return { owner: o, stats, setupDone: checks.filter((c) => c.done).length, setupTotal: checks.length };
-    }),
-  );
+  const rows = owners.map((o) => {
+    const stats = statsByOwner.get(o.id) ?? partnerStats([], today);
+    const checks = setupChecks(o, settings.get(o.id)!, activities.get(o.id)!, stats);
+    return { owner: o, stats, setupDone: checks.filter((c) => c.done).length, setupTotal: checks.length };
+  });
 
   const filter: FilterKey = FILTERS.find((f) => f.key === sp.filter)?.key ?? "all";
   const q = typeof sp.q === "string" ? sp.q.trim().toLowerCase() : "";
@@ -76,7 +78,10 @@ async function Partners({ searchParams }: { searchParams: Promise<Record<string,
     return true;
   };
   // Newest partners first.
-  const shown = rows.filter(matches).sort((a, b) => b.owner.createdAt.localeCompare(a.owner.createdAt));
+  const shown = pageOf(
+    rows.filter(matches).sort((a, b) => b.owner.createdAt.localeCompare(a.owner.createdAt)),
+    parsePage(sp.page),
+  );
   const counts: Record<FilterKey, number> = {
     all: rows.length,
     new: rows.filter((r) => isNewPartner(r.owner)).length,
@@ -85,12 +90,15 @@ async function Partners({ searchParams }: { searchParams: Promise<Record<string,
     suspended: rows.filter((r) => r.owner.suspension).length,
   };
   const active = rows.filter((r) => r.stats.recent > 0).length;
-  const href = (changes: { filter?: FilterKey; q?: string }) => {
+  // Anything but a page change starts again at page 1.
+  const href = (changes: { filter?: FilterKey; q?: string; page?: number }) => {
     const params = new URLSearchParams();
     const f = changes.filter ?? filter;
     const text = changes.q ?? q;
+    const page = changes.page ?? 1;
     if (f !== "all") params.set("filter", f);
     if (text) params.set("q", text);
+    if (page > 1) params.set("page", String(page));
     return `/admin/partners${params.size ? `?${params}` : ""}`;
   };
 
@@ -147,7 +155,7 @@ async function Partners({ searchParams }: { searchParams: Promise<Record<string,
           </form>
         </div>
 
-        {shown.length === 0 ? (
+        {shown.total === 0 ? (
           <p className="rounded-2xl bg-white p-8 text-center text-sm text-black/50">
             No partners match.{" "}
             {(q || filter !== "all") && (
@@ -157,66 +165,69 @@ async function Partners({ searchParams }: { searchParams: Promise<Record<string,
             )}
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-black/5 bg-white shadow-sm">
-            <table className="w-full min-w-[860px] text-left text-sm">
-              <thead className="border-b border-black/5 text-xs uppercase tracking-wide text-black/40">
-                <tr>
-                  <th className="px-4 py-3">Business</th>
-                  <th className="px-4 py-3">Contact</th>
-                  <th className="px-4 py-3">Joined</th>
-                  <th className="px-4 py-3">Bookings</th>
-                  <th className="px-4 py-3">Setup</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/5">
-                {shown.map(({ owner: o, stats, setupDone, setupTotal }) => (
-                  <tr key={o.id} className={o.suspension ? "bg-red-50/40" : undefined}>
-                    <td className="px-4 py-3">
-                      <Link href={`/admin/partners/${o.id}`} className="font-medium hover:text-emerald-700">
-                        {o.profile.name}
-                      </Link>
-                      <Badges owner={o} />
-                      <Link href={ownerPath(o.handle)} target="_blank" className="block text-xs text-black/50 hover:text-emerald-700">
-                        @{o.handle} ↗
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-black/70">
-                      <span className="block">{o.email}</span>
-                      {o.profile.phone && <span className="block text-xs text-black/50">{o.profile.phone}</span>}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-black/70">{day(o.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      <Link href={`/admin/all-bookings?partner=${o.id}`} className="block whitespace-nowrap hover:text-emerald-700" title="See their bookings">
-                        <span className="font-medium">{stats.upcoming}</span> upcoming
-                        <span className="block text-xs text-black/45">{stats.recent} in the last 30 days</span>
-                      </Link>
-                      {stats.stale > 0 ? (
-                        <span className="block whitespace-nowrap text-xs font-medium text-amber-800">
-                          {stats.stale} waiting over {STALE_HOURS} h
-                        </span>
-                      ) : stats.confirmedValue > 0 ? (
-                        <span className="block whitespace-nowrap text-xs text-black/45">{formatMoney(stats.confirmedValue)} confirmed</span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <SetupMeter done={setupDone} total={setupTotal} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
-                        <Link
-                          href={`/admin/partners/${o.id}`}
-                          className="whitespace-nowrap rounded-lg border border-black/15 px-3 py-1.5 text-xs font-semibold hover:border-emerald-600 hover:text-emerald-800"
-                        >
-                          Manage
-                        </Link>
-                        <ViewAsButton owner={o} adminId={admin.id} viewingId={viewing?.partner.id} />
-                      </div>
-                    </td>
+          <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[860px] text-left text-sm">
+                <thead className="border-b border-black/5 text-xs uppercase tracking-wide text-black/40">
+                  <tr>
+                    <th className="px-4 py-3">Business</th>
+                    <th className="px-4 py-3">Contact</th>
+                    <th className="px-4 py-3">Joined</th>
+                    <th className="px-4 py-3">Bookings</th>
+                    <th className="px-4 py-3">Setup</th>
+                    <th className="px-4 py-3" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-black/5">
+                  {shown.rows.map(({ owner: o, stats, setupDone, setupTotal }) => (
+                    <tr key={o.id} className={o.suspension ? "bg-red-50/40" : undefined}>
+                      <td className="px-4 py-3">
+                        <Link href={`/admin/partners/${o.id}`} className="font-medium hover:text-emerald-700">
+                          {o.profile.name}
+                        </Link>
+                        <Badges owner={o} />
+                        <Link href={ownerPath(o.handle)} target="_blank" className="block text-xs text-black/50 hover:text-emerald-700">
+                          @{o.handle} ↗
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-black/70">
+                        <span className="block">{o.email}</span>
+                        {o.profile.phone && <span className="block text-xs text-black/50">{o.profile.phone}</span>}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-black/70">{day(o.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <Link href={`/admin/all-bookings?partner=${o.id}`} className="block whitespace-nowrap hover:text-emerald-700" title="See their bookings">
+                          <span className="font-medium">{stats.upcoming}</span> upcoming
+                          <span className="block text-xs text-black/45">{stats.recent} in the last 30 days</span>
+                        </Link>
+                        {stats.stale > 0 ? (
+                          <span className="block whitespace-nowrap text-xs font-medium text-amber-800">
+                            {stats.stale} waiting over {STALE_HOURS} h
+                          </span>
+                        ) : stats.confirmedValue > 0 ? (
+                          <span className="block whitespace-nowrap text-xs text-black/45">{formatMoney(stats.confirmedValue)} confirmed</span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3">
+                        <SetupMeter done={setupDone} total={setupTotal} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/admin/partners/${o.id}`}
+                            className="whitespace-nowrap rounded-lg border border-black/15 px-3 py-1.5 text-xs font-semibold hover:border-emerald-600 hover:text-emerald-800"
+                          >
+                            Manage
+                          </Link>
+                          <ViewAsButton owner={o} adminId={admin.id} viewingId={viewing?.partner.id} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pager {...shown} href={(page) => href({ page })} />
           </div>
         )}
       </section>

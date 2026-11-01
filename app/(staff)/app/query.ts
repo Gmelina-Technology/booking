@@ -7,6 +7,8 @@
 // (/app/bookings). staffHref() picks the page from the query, so a link that
 // changes the mode or tab lands on the right one.
 
+import { parsePage } from "@/lib/paging";
+
 export const MODES = ["month", "week", "day", "table"] as const;
 export type Mode = (typeof MODES)[number];
 
@@ -40,9 +42,6 @@ export type StaffQuery = {
   /** Table page, from 1. Back to 1 whenever the list itself changes (tab, filter, search). */
   page: number;
 };
-
-/** Rows per table page. */
-export const PAGE_SIZE = 50;
 
 /** Query fields that change which rows the table lists; changing any of them starts again at page 1. */
 const LIST_FIELDS = ["mode", "view", "date", "activity", "past", "search"] as const;
@@ -85,19 +84,8 @@ export function parseQuery(sp: SearchParams, today: string, isActivity: (slug: s
     booking: /^[A-Z0-9]{4,16}$/.test(str(sp.booking)) ? str(sp.booking) : "",
     search: str(sp.q).trim().slice(0, 80),
     slot: /^[a-z0-9-]{1,60}~[A-Za-z0-9-]{1,60}~\d{1,2}$/.test(str(sp.slot)) ? str(sp.slot) : "",
-    page: /^[1-9]\d{0,5}$/.test(str(sp.page)) ? Number(sp.page) : 1,
+    page: parsePage(sp.page),
   };
-}
-
-/**
- * One page of `rows`. A page past the end (say, after approving the last
- * requests on it) shows the last page instead of an empty table.
- */
-export function pageOf<T>(rows: T[], page: number, size = PAGE_SIZE) {
-  const pages = Math.max(1, Math.ceil(rows.length / size));
-  const current = Math.min(Math.max(1, page), pages);
-  const start = (current - 1) * size;
-  return { rows: rows.slice(start, start + size), page: current, pages, from: start + 1, to: Math.min(start + size, rows.length) };
 }
 
 /** Whether a booking matches the search text (case and spacing ignored for phone numbers). */

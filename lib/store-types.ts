@@ -2,6 +2,7 @@
 // and the public store API (lib/store.ts).
 
 import type { BusinessProfile } from "./facility";
+import type { PartnerStats } from "./platform-stats";
 
 /**
  * Booking lifecycle:
@@ -116,8 +117,26 @@ export type AppNotification = {
 
 export type BookingFilter = { ownerId: string; activitySlug?: string; date?: string; status?: BookingStatus };
 
-/** Platform admins only (/admin/all-bookings): bookings across every partner, by date range ("YYYY-MM-DD", inclusive). */
-export type PlatformBookingFilter = { ownerId?: string; from?: string; to?: string; status?: BookingStatus };
+/** Platform admins only (/admin/all-bookings, /admin/partners): bookings across every partner. */
+export type PlatformBookingFilter = {
+  ownerId?: string;
+  /** Date range ("YYYY-MM-DD", inclusive). */
+  from?: string;
+  to?: string;
+  status?: BookingStatus;
+  /** Only bookings waiting on their partner (waitingSince() in lib/platform-stats.ts). */
+  waiting?: boolean;
+  /** Text in the reference, customer name, email or phone, ignoring case. */
+  search?: string;
+  /** Latest date first, instead of soonest first. */
+  newestFirst?: boolean;
+  /** One page of the list: skip `offset` bookings, then return at most `limit`. Counting ignores both. */
+  limit?: number;
+  offset?: number;
+};
+
+/** One partner's numbers over the bookings in a PlatformBookingFilter (see partnerStats()). */
+export type PlatformBookingSummary = PartnerStats & { ownerId: string; cancelled: number };
 
 /** The small JSON documents each owner has alongside their bookings. */
 export type DocKind = "activities" | "events" | "settings" | "hero" | "notifications";
@@ -206,6 +225,13 @@ export interface StoreBackend {
   listBookings(filter: BookingFilter): Promise<Booking[]>;
   /** Every partner's bookings in the filter, by date and start hour. Platform admins only. */
   listPlatformBookings(filter: PlatformBookingFilter): Promise<Booking[]>;
+  /** How many bookings the filter matches, ignoring `limit` and `offset`. Platform admins only. */
+  countPlatformBookings(filter: PlatformBookingFilter): Promise<number>;
+  /**
+   * Each partner's numbers over the bookings in the filter, worked out without
+   * loading them. `today` is the facility's date. Platform admins only.
+   */
+  summarizePlatformBookings(filter: PlatformBookingFilter, today: string, nowMs: number): Promise<PlatformBookingSummary[]>;
   findBooking(by: "id" | "accessToken", value: string): Promise<Booking | undefined>;
   /** Inserts the booking, or returns false if it overlaps an active booking on the same court. */
   insertBooking(booking: Booking): Promise<boolean>;
@@ -216,6 +242,8 @@ export interface StoreBackend {
   updateBooking(id: string, change: (b: Booking) => void): Promise<Booking | null>;
 
   readDoc<T>(ownerId: string, kind: DocKind, fallback: T): Promise<T>;
+  /** Every owner's document of one kind, by owner id, in one read. Owners without one are left out. */
+  readDocs<T>(kind: DocKind): Promise<Map<string, T>>;
   /** Atomic read-modify-write of a document. */
   updateDoc<T, R>(ownerId: string, kind: DocKind, fallback: T, change: (doc: T) => { doc: T; result: R }): Promise<R>;
 
