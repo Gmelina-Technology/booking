@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { currentOwnerId } from "@/lib/auth";
 import { platform } from "@/lib/facility";
 import { getPublicOwners } from "@/lib/owners";
+import Logo from "../logo";
 import MobileMenu from "./mobile-menu";
 
 const primaryButton = "ml-1 whitespace-nowrap rounded-lg bg-emerald-700 px-4 py-2 text-white hover:bg-emerald-800";
@@ -51,9 +52,8 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
     <>
       <header className="sticky top-0 z-20 border-b border-black/5 bg-white/80 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2 whitespace-nowrap text-lg font-bold tracking-tight">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-700 text-white">{platform.name[0]}</span>
-            {platform.name}
+          <Link href="/">
+            <Logo />
           </Link>
           <nav className="flex items-center gap-1 text-sm font-medium">
             <Suspense fallback={<NavLinks signedIn={false} hasVenues={false} />}>
