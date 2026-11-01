@@ -3,6 +3,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { currentAccount, currentOwner, isPlatformAdmin } from "@/lib/auth";
+import { platform } from "@/lib/facility";
 import { ownerPath } from "@/lib/owners";
 import { listBookings } from "@/lib/store";
 import { facilityNow } from "@/lib/time";
@@ -23,7 +24,31 @@ export default function PartnerLayout({ children }: LayoutProps<"/app">) {
       <Suspense fallback={<Sidebar area="app" pathname={null} inboxCount={0} top={top} />}>
         <Nav top={top} />
       </Suspense>
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1">
+        <Suspense>
+          <SuspendedNotice />
+        </Suspense>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Tells a suspended partner (or an admin viewing as one) why their page is offline. */
+async function SuspendedNotice() {
+  await connection();
+  const owner = await currentOwner();
+  if (!owner?.suspension) return null;
+  const since = new Date(owner.suspension.at).toLocaleDateString(platform.locale, { timeZone: platform.timeZone, dateStyle: "medium" });
+  return (
+    <div role="status" className="border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-950 md:px-6">
+      <p>
+        <strong>Your booking page is suspended</strong> (since {since}). Customers can&apos;t open it or send new requests. Reason:{" "}
+        {owner.suspension.reason}
+      </p>
+      <p className="mt-1 text-red-900/80">
+        Your existing bookings are unchanged and still need you. {platform.supportEmail ? `Questions? Email ${platform.supportEmail}.` : "Reply to the email we sent you with any questions."}
+      </p>
     </div>
   );
 }
