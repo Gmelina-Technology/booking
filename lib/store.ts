@@ -31,7 +31,7 @@ import type {
 // so one business can never read or change another's data. The exception,
 // listPlatformBookings(), is only for platform admin pages.
 
-export type { Booking, BookingStatus, EmailKind, EmailLogEntry, Owner, PartnerLogEntry, PlatformNotification, ViewAsLogEntry } from "./store-types";
+export type { Booking, BookingStatus, EmailKind, EmailLogEntry, Owner, PagePause, PartnerLogEntry,PlatformNotification, ViewAsLogEntry } from "./store-types";
 export { SlotTaken } from "./store-types";
 export { deleteUpload, isUploadName, readUpload, saveUpload, UPLOAD_TYPES } from "./uploads";
 

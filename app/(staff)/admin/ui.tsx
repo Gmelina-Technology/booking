@@ -14,11 +14,16 @@ export function Stat({ label, value, tone }: { label: string; value: string; ton
   );
 }
 
-/** New, suspended and platform admin labels next to a partner's name. */
+/** New, suspended, paused and platform admin labels next to a partner's name. */
 export function Badges({ owner }: { owner: Owner }) {
   return (
     <>
       {owner.suspension && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">Suspended</span>}
+      {owner.pause && !owner.suspension && (
+        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800" title="The partner paused their page">
+          Paused
+        </span>
+      )}
       {isNewPartner(owner, 7) && <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">New</span>}
       {isPlatformAdmin(owner) && <span className="ml-2 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">Admin</span>}
     </>
