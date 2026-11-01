@@ -1,11 +1,13 @@
 import Link from "next/link";
 import ActivityForm from "../activity-form";
+import { PageBanners } from "../../page-banners";
 
 export const metadata = { title: "Staff — new activity" };
 
 export default function NewActivityPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
+      <PageBanners />
       <Link href="/app/activities" className="text-sm text-black/60 hover:underline">
         ← Activities
       </Link>

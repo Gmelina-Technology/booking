@@ -37,6 +37,10 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
+  // Development only: lets the dev server be opened at 127.0.0.1 as well as
+  // localhost. Each host keeps its own cookies, so you can be signed in as two
+  // accounts side by side (say a platform admin and a partner) in one browser.
+  allowedDevOrigins: ["127.0.0.1"],
   turbopack: {
     rules: {
       "*.css": {

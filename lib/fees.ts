@@ -15,6 +15,8 @@
 //
 // Pure functions only (no storage), so they are easy to test (tests/fees.test.ts).
 
+import { addDays } from "./time";
+
 /** First booking date charged a flat fee. Hourly rates only apply before it. */
 export const FLAT_FEES_FROM = "2026-11-02";
 
@@ -47,7 +49,7 @@ export type FeeSchedule = { rates: FeeRate[] };
 export const DEFAULT_RATE: FeeRate = {
   id: "default",
   scope: "platform",
-  perBooking: 20,
+  perBooking: 15,
   effectiveFrom: FLAT_FEES_FROM,
   createdAt: "2026-11-01T00:00:00.000Z",
   createdBy: "system",
@@ -77,6 +79,28 @@ export function resolveRate(schedule: FeeSchedule, ownerId: string, date: string
   if (promo) return promo;
   const platform = [...schedule.rates.filter((r) => r.scope === "platform"), DEFAULT_RATE, LEGACY_DEFAULT_RATE];
   return platform.filter(applies).sort(latestFirst)[0];
+}
+
+const samePricing = (a: FeePricing, b: FeePricing) =>
+  isHourly(a) ? isHourly(b) && a.ratePerHour === b.ratePerHour && a.capPerBooking === b.capPerBooking : !isHourly(b) && a.perBooking === b.perBooking;
+
+/**
+ * The partner's next price change after `today`: a scheduled platform rate, a
+ * promo starting or ending, or flat fees starting. Null when none is scheduled.
+ */
+export function nextRateChange(schedule: FeeSchedule, ownerId: string, today: string): { from: string; rate: FeeRate } | null {
+  const current = resolveRate(schedule, ownerId, today);
+  const dates = new Set([FLAT_FEES_FROM]);
+  for (const r of schedule.rates) {
+    if (r.scope === "owner" && r.ownerId !== ownerId) continue;
+    dates.add(r.effectiveFrom);
+    if (r.until) dates.add(addDays(r.until, 1));
+  }
+  for (const from of [...dates].filter((d) => d > today).sort()) {
+    const rate = resolveRate(schedule, ownerId, from);
+    if (!samePricing(rate, current)) return { from, rate };
+  }
+  return null;
 }
 
 /** True once a rate can't apply to bookings after `today`: a promo past its end, or any hourly rate once flat fees started. */

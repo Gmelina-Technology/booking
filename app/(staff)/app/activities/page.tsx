@@ -5,12 +5,14 @@ import { requireOwner } from "@/lib/auth";
 import { formatHour, formatMoney } from "@/lib/facility";
 import { listBookings } from "@/lib/store";
 import { ActivityRowActions } from "./row-actions";
+import { PageBanners } from "../page-banners";
 
 export const metadata = { title: "Staff — activities" };
 
 export default function ActivitiesAdminPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
+      <PageBanners />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Activities</h1>

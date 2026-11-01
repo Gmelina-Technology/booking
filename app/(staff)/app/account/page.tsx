@@ -4,12 +4,14 @@ import { currentViewingAs, requireOwner } from "@/lib/auth";
 import { logoutEverywhere } from "@/app/(platform)/login/actions";
 import { ToastOnLoad } from "@/app/toaster";
 import { ChangeEmailForm, ChangePasswordForm, DeleteAccountForm } from "./account-forms";
+import { PageBanners } from "../page-banners";
 
 export const metadata = { title: "Staff — account & security" };
 
 export default function AccountPage({ searchParams }: PageProps<"/app/account">) {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
+      <PageBanners />
       <h1 className="text-3xl font-bold tracking-tight">Account &amp; security</h1>
       <p className="mt-1 text-black/60">How you sign in, and your account itself.</p>
       <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-2xl bg-black/5" />}>

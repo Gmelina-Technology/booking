@@ -7,12 +7,14 @@ import { requireOwner } from "@/lib/auth";
 import { getEvent } from "@/lib/events";
 import { facilityNow } from "@/lib/time";
 import EventForm from "../event-form";
+import { PageBanners } from "../../page-banners";
 
 export const metadata = { title: "Staff — edit event" };
 
 export default function EditEventPage({ params }: PageProps<"/app/events/[id]">) {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
+      <PageBanners />
       <Link href="/app/events" className="text-sm text-black/60 hover:underline">
         ← Past events
       </Link>

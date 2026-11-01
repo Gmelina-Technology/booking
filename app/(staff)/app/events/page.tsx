@@ -6,12 +6,14 @@ import { requireOwner } from "@/lib/auth";
 import { getAllEvents, photoUrl } from "@/lib/events";
 import { formatDate } from "@/lib/time";
 import { EventRowActions } from "./row-actions";
+import { PageBanners } from "../page-banners";
 
 export const metadata = { title: "Staff — events" };
 
 export default function EventsAdminPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
+      <PageBanners />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Past events</h1>

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { partnerJoinedEmail } from "./emails";
+import { bannerResponseEmail, partnerJoinedEmail } from "./emails";
 import { sendMail } from "./mailer";
 import { readPlatformNotifications, updatePlatformNotifications, type Owner } from "./store";
 import type { PlatformNotification } from "./store-types";
@@ -39,6 +39,35 @@ export async function notifyPartnerJoined(owner: Owner, adminEmails: string[], b
     if (to === owner.email) continue;
     const result = await sendMail(partnerJoinedEmail(to, owner, link));
     if (!result.ok) console.error("New partner email failed:", result.detail);
+  }
+}
+
+/**
+ * Tells platform admins a partner pressed "Notify the team" on a page banner
+ * (lib/page-banners.ts): an entry in their bell and an email to each of
+ * `adminEmails`. Never throws, so the partner's click always goes through.
+ */
+export async function notifyBannerResponse(owner: Owner, bannerTitle: string, adminEmails: string[], baseUrl: string): Promise<void> {
+  try {
+    const n: PlatformNotification = {
+      id: randomBytes(6).toString("hex"),
+      kind: "banner_response",
+      ownerId: owner.id,
+      title: `${owner.profile.name} responded: ${bannerTitle}`,
+      body: `@${owner.handle} · ${owner.email}`,
+      at: new Date().toISOString(),
+      readBy: [],
+    };
+    await updatePlatformNotifications((all) => [n, ...all].slice(0, MAX_KEPT));
+  } catch (err) {
+    console.error(`Platform notification for @${owner.handle}'s banner response failed:`, err);
+  }
+  const link = `${baseUrl}/admin/partners/${owner.id}`;
+  for (const to of adminEmails) {
+    // An admin responding for their own business doesn't need to be told.
+    if (to === owner.email) continue;
+    const result = await sendMail(bannerResponseEmail(to, owner, bannerTitle, link));
+    if (!result.ok) console.error("Banner response email failed:", result.detail);
   }
 }
 

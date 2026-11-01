@@ -22,6 +22,7 @@ const icons = {
   receipt: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6",
   sliders: "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4",
   users: "M9 11a4 4 0 100-8 4 4 0 000 8zM2 21v-1a6 6 0 0112 0v1M16 3.5a4 4 0 010 7.5M18 14a6 6 0 014 6v1",
+  megaphone: "M3 10v4h4l7 5V5L7 10zM18 8a5 5 0 010 8",
 };
 
 type Group = { label: string | null; items: Item[] };
@@ -78,6 +79,7 @@ const adminGroups: Group[] = [
       { href: "/admin/partners", label: "Partners", icon: icons.users },
       { href: "/admin/all-bookings", label: "All bookings", icon: icons.list },
       { href: "/admin/fees", label: "Partner fees", icon: icons.sliders },
+      { href: "/admin/banners", label: "Page banners", icon: icons.megaphone },
     ],
   },
   { label: "Your business", items: [{ href: "/app", label: "Back to dashboard", icon: icons.home }] },

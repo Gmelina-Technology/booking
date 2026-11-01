@@ -7,6 +7,7 @@ import {
   isCharged,
   LEGACY_DEFAULT_RATE,
   monthlyStatement,
+  nextRateChange,
   resolveRate,
   type FeeRate,
   type FeeSchedule,
@@ -25,10 +26,10 @@ const booking = (r: Partial<{ id: string; date: string; startHour: number; hours
 const now = { date: "2026-11-30", hour: 12 };
 const perBooking = (r: FeeRate) => feeFor(r, 1);
 
-test("default rate: a flat ₱20 per booking, however long", () => {
-  expect(feeFor(DEFAULT_RATE, 1)).toBe(20);
-  expect(feeFor(DEFAULT_RATE, 3)).toBe(20);
-  expect(feeFor(DEFAULT_RATE, 8)).toBe(20);
+test("default rate: a flat ₱15 per booking, however long", () => {
+  expect(feeFor(DEFAULT_RATE, 1)).toBe(15);
+  expect(feeFor(DEFAULT_RATE, 3)).toBe(15);
+  expect(feeFor(DEFAULT_RATE, 8)).toBe(15);
   expect(feeFor({ perBooking: 35 }, 6)).toBe(35);
 });
 
@@ -45,7 +46,7 @@ test("empty schedule falls back to the built-in default for the date", () => {
 
 test("a future platform rate doesn't apply yet", () => {
   const schedule: FeeSchedule = { rates: [rate({ perBooking: 25, effectiveFrom: "2026-12-01" })] };
-  expect(perBooking(resolveRate(schedule, "o1", "2026-11-30"))).toBe(20);
+  expect(perBooking(resolveRate(schedule, "o1", "2026-11-30"))).toBe(15);
   expect(perBooking(resolveRate(schedule, "o1", "2026-12-01"))).toBe(25);
 });
 
@@ -62,9 +63,9 @@ test("an owner promo overrides the platform rate, only for that owner and its da
     rates: [rate({ scope: "owner", ownerId: "o1", perBooking: 5, effectiveFrom: "2026-11-05", until: "2026-11-15" })],
   };
   expect(perBooking(resolveRate(schedule, "o1", "2026-11-10"))).toBe(5);
-  expect(perBooking(resolveRate(schedule, "o2", "2026-11-10"))).toBe(20);
-  expect(perBooking(resolveRate(schedule, "o1", "2026-11-16"))).toBe(20);
-  expect(perBooking(resolveRate(schedule, "o1", "2026-11-04"))).toBe(20);
+  expect(perBooking(resolveRate(schedule, "o2", "2026-11-10"))).toBe(15);
+  expect(perBooking(resolveRate(schedule, "o1", "2026-11-16"))).toBe(15);
+  expect(perBooking(resolveRate(schedule, "o1", "2026-11-04"))).toBe(15);
 });
 
 test("hourly rates keep past fees but stop at the switch to flat fees", () => {
@@ -104,8 +105,8 @@ test("monthly statement charges each booking the flat fee", () => {
     booking({ id: "F", date: "2026-11-30", startHour: 18, hours: 2 }),
   ];
   const s = monthlyStatement(bookings, { rates: [] }, "o1", "2026-11", now);
-  expect(s.lines.map((l) => [l.booking.id, l.fee])).toEqual([["A", 20], ["B", 20], ["C", 20]]);
-  expect(s.total).toBe(60);
+  expect(s.lines.map((l) => [l.booking.id, l.fee])).toEqual([["A", 15], ["B", 15], ["C", 15]]);
+  expect(s.total).toBe(45);
   expect(s.upcoming).toBe(1);
 });
 
@@ -113,4 +114,26 @@ test("a month with no bookings costs nothing", () => {
   const s = monthlyStatement([], { rates: [] }, "o1", "2026-11", now);
   expect(s.total).toBe(0);
   expect(s.lines.length).toBe(0);
+});
+
+test("the next rate change: a scheduled platform rate, or a partner's promo starting and ending", () => {
+  expect(nextRateChange({ rates: [] }, "o1", "2026-11-02")).toBeNull();
+
+  const platform: FeeSchedule = { rates: [rate({ perBooking: 25, effectiveFrom: "2026-11-03" })] };
+  expect(nextRateChange(platform, "o1", "2026-11-02")).toMatchObject({ from: "2026-11-03", rate: { perBooking: 25 } });
+  expect(nextRateChange(platform, "o1", "2026-11-03")).toBeNull();
+
+  const promo: FeeSchedule = {
+    rates: [rate({ scope: "owner", ownerId: "o1", perBooking: 5, effectiveFrom: "2026-11-05", until: "2026-11-15" })],
+  };
+  expect(nextRateChange(promo, "o1", "2026-11-02")).toMatchObject({ from: "2026-11-05", rate: { perBooking: 5 } });
+  expect(nextRateChange(promo, "o1", "2026-11-10")).toMatchObject({ from: "2026-11-16", rate: { perBooking: 15 } });
+  // Another partner's promo isn't their change.
+  expect(nextRateChange(promo, "o2", "2026-11-02")).toBeNull();
+  // A new version at the same price isn't a change.
+  expect(nextRateChange({ rates: [rate({ perBooking: 15, effectiveFrom: "2026-12-01" })] }, "o1", "2026-11-02")).toBeNull();
+});
+
+test("hourly partners are told about the switch to flat fees", () => {
+  expect(nextRateChange({ rates: [] }, "o1", "2026-10-20")).toMatchObject({ from: FLAT_FEES_FROM, rate: { perBooking: 15 } });
 });
