@@ -20,7 +20,7 @@ function suggestHandle(name: string) {
     .replace(/-+$/, "");
 }
 
-/** The partner rate, e.g. "₱10 per booked hour, max ₱50 per booking". Sign-up is the one place outside the dashboard that shows it. */
+/** The partner rate, e.g. "₱20 per booking". Sign-up is the one place outside the dashboard that shows it. */
 export default function SignupForm({ feeRate }: { feeRate: string }) {
   const [state, action, pending] = useActionState<SignupState, FormData>(async (prev, form) => {
     const next = await signup(prev, form);

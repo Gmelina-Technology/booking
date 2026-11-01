@@ -28,14 +28,12 @@ export async function addFeeRate(form: FormData): Promise<FeeResult> {
   const tomorrow = addDays(facilityNow().date, 1);
 
   const scope = form.get("scope") === "owner" ? "owner" : "platform";
-  const ratePerHour = amount(form.get("ratePerHour"));
-  const capPerBooking = amount(form.get("capPerBooking"));
+  const perBooking = amount(form.get("perBooking"));
   const effectiveFrom = String(form.get("effectiveFrom") ?? "");
   const until = String(form.get("until") ?? "").trim() || undefined;
   const note = String(form.get("note") ?? "").trim().slice(0, 200) || undefined;
 
-  if (ratePerHour === null || ratePerHour === undefined) return { ok: false, message: "Enter the rate per hour as a whole number of pesos." };
-  if (capPerBooking === undefined) return { ok: false, message: "The cap must be a whole number of pesos, or empty for no cap." };
+  if (perBooking === null || perBooking === undefined) return { ok: false, message: "Enter the fee per booking as a whole number of pesos." };
   if (!isValidDate(effectiveFrom) || effectiveFrom < tomorrow)
     return { ok: false, message: "Rates can start tomorrow at the earliest, so fees already charged don't change." };
 
@@ -50,8 +48,7 @@ export async function addFeeRate(form: FormData): Promise<FeeResult> {
     id: randomBytes(6).toString("hex"),
     scope,
     ...(ownerId && { ownerId }),
-    ratePerHour,
-    capPerBooking,
+    perBooking,
     effectiveFrom,
     ...(scope === "owner" && until && { until }),
     ...(note && { note }),

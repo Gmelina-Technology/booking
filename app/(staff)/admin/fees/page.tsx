@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { requirePlatformAdmin } from "@/lib/auth";
 import { describeRate } from "@/lib/fee-text";
-import { DEFAULT_RATE, resolveRate, type FeeRate } from "@/lib/fees";
+import { DEFAULT_RATE, feeFor, FLAT_FEES_FROM, hasEnded, isHourly, LEGACY_DEFAULT_RATE, resolveRate, type FeeRate } from "@/lib/fees";
 import { listOwners, readFeeSchedule } from "@/lib/store";
 import { addDays, facilityNow, formatDate } from "@/lib/time";
 import { RateActions } from "./rate-actions";
@@ -15,7 +15,7 @@ export default function PlatformFeesPage() {
     <div className="mx-auto max-w-5xl px-4 py-10">
       <h1 className="text-3xl font-bold tracking-tight">Partner fees</h1>
       <p className="mt-1 text-black/60">
-        What partners pay per completed booking. Only platform admins see this page; partners see their own rate on their Billing page.
+        The flat fee partners pay per completed booking, however long it runs. Only platform admins see this page; partners see their own rate on their Billing page.
       </p>
       <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-2xl bg-black/5" />}>
         <Fees />
@@ -42,14 +42,15 @@ async function Fees() {
         <p className="text-xs font-semibold uppercase tracking-widest text-black/40">Platform rate today</p>
         <p className="mt-1 text-2xl font-bold">{describeRate(current)}</p>
         <p className="mt-1 text-sm text-black/50">
-          {current === DEFAULT_RATE ? "Built-in default. Save a rate below to replace it." : `In effect since ${formatDate(current.effectiveFrom, { year: "numeric" })}.`}
+          {current === DEFAULT_RATE || current === LEGACY_DEFAULT_RATE ? "Built-in default. Save a rate below to replace it." : `In effect since ${formatDate(current.effectiveFrom, { year: "numeric" })}.`}
+          {isHourly(current) && ` Fees become a flat amount per booking from ${formatDate(FLAT_FEES_FROM, { year: "numeric" })}.`}
         </p>
       </section>
 
       <RateForm
         owners={owners.map((o) => ({ id: o.id, name: ownerName.get(o.id)! }))}
         earliest={addDays(today, 1)}
-        current={{ ratePerHour: current.ratePerHour, capPerBooking: current.capPerBooking }}
+        current={feeFor(resolveRate(schedule, "", addDays(today, 1)), 1)}
       />
 
       <RateTable title="Partner promos" empty="No promos yet." rates={promos} today={today} ownerName={ownerName} />
@@ -59,6 +60,7 @@ async function Fees() {
 }
 
 function status(r: FeeRate, today: string) {
+  if (isHourly(r) && (hasEnded(r, today) || r.effectiveFrom >= FLAT_FEES_FROM)) return { label: "Hourly, no longer used", className: "bg-black/5 text-black/50" };
   if (r.effectiveFrom > today) return { label: "Scheduled", className: "bg-blue-50 text-blue-700" };
   if (r.until && r.until < today) return { label: "Ended", className: "bg-black/5 text-black/50" };
   return { label: "Active", className: "bg-emerald-50 text-emerald-700" };
@@ -118,7 +120,7 @@ function RateTable({
                       <span className="block">{r.createdAt.slice(0, 10)}</span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <RateActions id={r.id} scope={r.scope} scheduled={r.effectiveFrom > today} ended={!!r.until && r.until <= today} />
+                      <RateActions id={r.id} scope={r.scope} scheduled={r.effectiveFrom > today} ended={hasEnded(r, today)} />
                     </td>
                   </tr>
                 );

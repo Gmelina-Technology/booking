@@ -17,14 +17,14 @@ export default function RateForm({
 }: {
   owners: { id: string; name: string }[];
   earliest: string;
-  current: { ratePerHour: number; capPerBooking: number | null };
+  /** Today's flat fee per booking, to start the form from. */
+  current: number;
 }) {
   const [scope, setScope] = useState<"platform" | "owner">("platform");
-  const [rate, setRate] = useState(String(current.ratePerHour));
-  const [cap, setCap] = useState(current.capPerBooking === null ? "" : String(current.capPerBooking));
+  const [fee, setFee] = useState(String(current));
   const [saving, start] = useTransition();
 
-  const preview = { ratePerHour: Number(rate) || 0, capPerBooking: cap.trim() === "" ? null : Number(cap) || 0 };
+  const preview = { perBooking: Number(fee) || 0 };
 
   function submit(form: FormData) {
     start(async () => toast.result(await addFeeRate(form)));
@@ -59,12 +59,8 @@ export default function RateForm({
         )}
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block text-sm">
-            <span className="font-medium">Rate per booked hour (₱)</span>
-            <input name="ratePerHour" type="number" min={0} step={1} required value={rate} onChange={(e) => setRate(e.target.value)} className={inputClass} />
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium">Max per booking (₱)</span>
-            <input name="capPerBooking" type="number" min={0} step={1} value={cap} onChange={(e) => setCap(e.target.value)} placeholder="No cap" className={inputClass} />
+            <span className="font-medium">Fee per booking (₱)</span>
+            <input name="perBooking" type="number" min={0} step={1} required value={fee} onChange={(e) => setFee(e.target.value)} className={inputClass} />
           </label>
           <label className="block text-sm">
             <span className="font-medium">Starts on bookings from</span>
@@ -88,6 +84,7 @@ export default function RateForm({
       </div>
       <aside className="rounded-xl bg-black/[0.03] p-4 text-sm">
         <p className="font-medium">Preview</p>
+        <p className="mt-0.5 text-xs text-black/50">The same flat fee, however long the booking.</p>
         <dl className="mt-2 space-y-1.5">
           {[1, 2, 3, 6].map((h) => (
             <div key={h} className="flex justify-between">
