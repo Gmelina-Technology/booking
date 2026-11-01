@@ -7,6 +7,7 @@ import { formatHour, formatMoney, paymentReady } from "@/lib/facility";
 import { getPublicOwner, ownerFromParams, ownerPath } from "@/lib/owners";
 import { WEEKDAY_NAMES } from "@/lib/schedule";
 import { readSettings } from "@/lib/store";
+import PausedNotice, { pausedNow } from "../../paused-notice";
 import BookingWidget from "./booking-widget";
 
 export async function generateMetadata({ params }: PageProps<"/p/[handle]/activities/[slug]">): Promise<Metadata> {
@@ -28,7 +29,7 @@ async function ActivityContent({ params }: { params: Promise<{ handle: string; s
   const owner = await ownerFromParams(params);
   const activity = await getActivity(owner.id, (await params).slug);
   if (!activity || !activity.active) notFound();
-  const settings = await readSettings(owner.id);
+  const [settings, paused] = await Promise.all([readSettings(owner.id), pausedNow(owner)]);
 
   return (
     <>
@@ -48,7 +49,11 @@ async function ActivityContent({ params }: { params: Promise<{ handle: string; s
       </section>
 
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-        {activity.noDownpayment || paymentReady(settings) ? (
+        {paused ? (
+          <div>
+            <PausedNotice owner={owner} />
+          </div>
+        ) : activity.noDownpayment || paymentReady(settings) ? (
           <BookingWidget
             ownerId={owner.id}
             bookingWindowDays={settings.bookingWindowDays}

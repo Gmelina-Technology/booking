@@ -15,12 +15,14 @@ import { CreateBooking } from "./create-booking";
 import { PageHeader } from "./page-header";
 import { staffHref, parseQuery } from "./query";
 import { Change, RevenueChart } from "./sales/revenue-chart";
+import { PageBanners } from "./page-banners";
 
 export const metadata = { title: "Staff — overview" };
 
 export default function OverviewPage({ searchParams }: PageProps<"/app">) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
+      <PageBanners />
       <Suspense
         fallback={
           <>

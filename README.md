@@ -72,6 +72,14 @@ settings.
 - **Partner dashboard** at `/app` (the same URL for every partner) shows the signed-in owner's data. Its
   menu groups bookings, catalog, the public page and settings. **Business profile** edits the name, tagline, address, phone and contact email shown on their page
   and in emails.
+- **Pausing the page** (**Page status** on Business profile), for a holiday or renovation. The partner
+  adds an optional message for customers and an optional reopening date. While paused, the page
+  stays online but shows the message in place of booking, new requests are refused (`createBooking()`),
+  and it leaves the directory (`getListedOwners()` in `lib/owners.ts`). Existing bookings and their
+  links are unchanged. **Resume bookings now** ends it; with a reopening date it also ends by itself on
+  that day (`isPaused()`), and the daily sweep clears it. An amber notice in the staff area and a
+  **Paused** label for platform admins show it's on. This is separate from an admin
+  [suspending a partner](#managing-partners), which the partner can't undo.
 - **Platform admin area** at `/admin`, for platform users only (`PLATFORM_ADMIN_EMAILS`, see
   [Platform admin](#platform-admin)): partners, every partner's bookings, and fee rates. Platform admins also have a partner account, so their dashboard
   menu links to it. Anyone else gets a 404 on its pages, and a partner opening `/admin` itself is
@@ -177,7 +185,7 @@ in [`lib/sales.ts`](lib/sales.ts).
 ## Partner fees
 
 Partners (business owners) pay no monthly fee. Each booking is charged once it's confirmed and its
-time slot has ended: one flat fee per booking, however many hours it runs (default ₱20 per booking).
+time slot has ended: one flat fee per booking, however many hours it runs (default ₱15 per booking).
 Cancelled bookings, courts the partner blocked and quiet months cost nothing. No-shows are still
 charged, since the court was held. The calculation is in [`lib/fees.ts`](lib/fees.ts).
 
@@ -190,7 +198,8 @@ an admin gives them a flat promo.
   platform rate and per-partner promo rates at `/admin/fees`, with a preview and change
   history. A new rate starts tomorrow at the earliest, so a fee already charged never changes.
 - **Partners** see their current rate and a monthly statement at `/app/billing`. Sign-up asks
-  them to agree to the current rate, and older accounts accept the fee terms on that page.
+  them to agree to the current rate. Older accounts accept the fee terms on that page, or from the
+  built-in [page banner](#page-banners) that shows on every dashboard page until they do.
 - **The public `/pricing` page** describes the partnership but never states the fee. Partners only
   see their exact rate when signing up and on Billing.
 
@@ -245,6 +254,36 @@ When a new partner finishes signing up (after their email code), every platform 
   signing up their own business isn't emailed about it. Both are sent after the sign-up response, so
   a slow mail server never holds up the new partner.
 
+### Page banners
+
+`/admin/banners` posts notices at the top of every page of partners' dashboards (`/app`), for things
+they'd miss by not opening the right page (`lib/page-banners.ts`). There are two kinds:
+
+- **Generic** banners just inform. Each partner hides one for themselves with **Got it**.
+- **Custom** banners ask partners to do something, and their button does it (for example **I agree**
+  to the fee terms). A custom banner only shows to partners who still need to act, can't be
+  dismissed, and disappears for each partner once they have.
+
+Custom banners have these actions:
+
+| Action | Button | What it does |
+|--------|--------|--------------|
+| Agree to the per-booking fee | **I agree** | Records the partner's agreement to the fee terms. The banner shows their rate, and any scheduled change to it. |
+| Notify the platform team | **Notify the team** | Tells platform admins in their bell ("<business> responded: <title>") and emails each address in `PLATFORM_ADMIN_EMAILS` with the partner's details and a link to them, e.g. for "Want help setting up?". |
+
+Either kind can have a link to a page with more detail, a style (info or important), a last day, and
+an audience of partners who joined before a date. **End** stops showing a banner; ended ones stay
+listed with how many partners dismissed them. The page shows how many partners each live banner
+still reaches.
+
+Until an admin changes them, a built-in custom banner asks partners who joined before fees to agree
+to them. While viewing as a partner, an admin sees their banners but can't dismiss them or take an
+action only the partner may.
+
+To add a custom action, add its key to `PageBannerAction` in `lib/store-types.ts` and an entry to
+`BANNER_ACTIONS` in `lib/page-banners.ts`: its button label, who still needs to do it, and what it does.
+It then appears in the admin's **Button action** picker.
+
 ### All bookings
 
 `/admin/all-bookings` lists every partner's bookings in one place, for keeping an eye on how partners
@@ -294,7 +333,7 @@ reason, which the partner sees:
 | `/login` | Owner sign-in |
 | `/reset-password` | Forgot password: emails a one-time link to `/reset-password/<token>` |
 | `/api/cron/release-holds` | Daily sweep that releases unpaid holds (Vercel cron, needs `CRON_SECRET`) |
-| `/app/business` | Business profile: the owner's page link and the business details shown on it |
+| `/app/business` | Business profile: the owner's page link, pausing or resuming the page, and the business details shown on it |
 | `/app/account` | Account & security: change sign-in email or password, sign out everywhere, delete the account |
 | `/account/confirm-email/<token>` | Confirms a new sign-in email from the emailed link |
 | `/privacy`, `/terms` | Privacy notice and terms of service (linked from every footer, sign-up and the booking form) |

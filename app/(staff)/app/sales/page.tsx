@@ -9,6 +9,7 @@ import { listBookings } from "@/lib/store";
 import { addMonths, endOfMonth, facilityNow } from "@/lib/time";
 import { PageHeader } from "../page-header";
 import { Change, monthLabel, RevenueChart } from "./revenue-chart";
+import { PageBanners } from "../page-banners";
 
 export const metadata = { title: "Staff — sales" };
 
@@ -17,6 +18,7 @@ const subtitle = "How your business is growing. Revenue counts confirmed booking
 export default function SalesPage({ searchParams }: PageProps<"/app/sales">) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
+      <PageBanners />
       <Suspense
         fallback={
           <>

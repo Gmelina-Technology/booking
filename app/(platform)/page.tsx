@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getActiveActivities } from "@/lib/activities";
 import { getHeroSettings } from "@/lib/banner";
 import { platform } from "@/lib/facility";
-import { getPublicOwners, ownerPath, type PublicOwner } from "@/lib/owners";
+import { getListedOwners, ownerPath, type PublicOwner } from "@/lib/owners";
 import { CalendarMock, ChatMock, LegendChips, PhoneMock, StatusChip, type MockStatus } from "./showcase";
 import VenueList, { type Venue } from "./venue-list";
 
@@ -80,7 +80,7 @@ async function toVenue(o: PublicOwner): Promise<Venue> {
 }
 
 export default async function PlatformHome() {
-  const owners = await getPublicOwners();
+  const owners = await getListedOwners();
   const sample = platform.sampleHandle ? owners.find((o) => o.handle === platform.sampleHandle) : undefined;
   const venues = await Promise.all(owners.map(toVenue));
 

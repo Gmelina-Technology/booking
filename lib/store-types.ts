@@ -89,7 +89,15 @@ export type Owner = {
    * in and look after the bookings they already have.
    */
   suspension?: { at: string; by: string; reason: string };
+  /**
+   * Set while the partner has paused their own page (a holiday, renovation):
+   * it stays online with their message but takes no new requests, and leaves
+   * the directory. `until` ("YYYY-MM-DD") is the day it reopens by itself.
+   */
+  pause?: PagePause;
 };
+
+export type PagePause = { at: string; message: string; until?: string };
 
 /** What a staff notification is about (lib/notifications.ts). */
 export type NotificationKind = "new_request" | "payment_submitted" | "hold_released" | "customer_cancelled";
@@ -115,7 +123,38 @@ export type PlatformBookingFilter = { ownerId?: string; from?: string; to?: stri
 export type DocKind = "activities" | "events" | "settings" | "hero" | "notifications";
 
 /** Documents shared by the whole platform rather than one owner. */
-export type PlatformDocKind = "fees" | "view-as-log" | "partner-log" | "notifications";
+export type PlatformDocKind = "fees" | "view-as-log" | "partner-log" | "notifications" | "page-banners";
+
+/** Something a custom page banner asks the partner to do, run by its button (lib/page-banners.ts). */
+export type PageBannerAction = "accept-fee-terms" | "notify-platform";
+
+/**
+ * A notice at the top of every partner dashboard page (lib/page-banners.ts).
+ *   generic  something partners should know; "Got it" hides it for that partner
+ *   custom   asks partners to do something (`action`); shown until they have
+ */
+export type PageBanner = {
+  id: string;
+  kind: "generic" | "custom";
+  tone: "info" | "warning";
+  title: string;
+  body: string;
+  /** A page with more detail, e.g. /app/billing. */
+  link?: { href: string; label: string };
+  /** Custom banners only. */
+  action?: PageBannerAction;
+  /** Only partners who joined before this date ("YYYY-MM-DD"). Missing means everyone. */
+  joinedBefore?: string;
+  /** Last day it's shown ("YYYY-MM-DD"). Missing means until a platform admin ends it. */
+  until?: string;
+  /** When a platform admin ended it. It stays listed, as history. */
+  endedAt?: string;
+  createdAt: string;
+  /** The platform admin's email, or "system" for the built-in banners. */
+  createdBy: string;
+  /** Partners who dismissed a generic banner. */
+  dismissedBy: string[];
+};
 
 /** A platform admin starting or stopping "view as" for a partner, kept for accountability. */
 export type ViewAsLogEntry = { at: string; event: "start" | "stop"; adminEmail: string; ownerId: string; ownerHandle: string };
@@ -124,7 +163,7 @@ export type ViewAsLogEntry = { at: string; event: "start" | "stop"; adminEmail: 
 export type PartnerLogEntry = { at: string; event: "suspend" | "reinstate"; adminEmail: string; ownerId: string; ownerHandle: string; reason?: string };
 
 /** What a platform notification is about (lib/platform-notifications.ts). */
-export type PlatformNotificationKind = "partner_joined";
+export type PlatformNotificationKind = "partner_joined" | "banner_response";
 
 /** One entry in a platform admin's notification bell. Shared by every admin, each with their own read state. */
 export type PlatformNotification = {

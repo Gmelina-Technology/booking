@@ -2,15 +2,21 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { requireOwner } from "@/lib/auth";
-import { ownerPath } from "@/lib/owners";
+import { platform } from "@/lib/facility";
+import { isPaused, ownerPath } from "@/lib/owners";
+import { holdsSlot, listBookings, type PagePause } from "@/lib/store";
+import { addDays, facilityNow, formatDate } from "@/lib/time";
 import { ShareButtons } from "@/app/p/[handle]/share";
 import BusinessForm from "./business-form";
+import { PageBanners } from "../page-banners";
+import PauseForm, { type PauseView } from "./pause-form";
 
 export const metadata = { title: "Staff — business profile" };
 
 export default function BusinessPage({ searchParams }: PageProps<"/app/business">) {
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
+      <PageBanners />
       <h1 className="text-3xl font-bold tracking-tight">Business profile</h1>
       <p className="mt-1 text-black/60">Your public booking page and the details customers see.</p>
       <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-2xl bg-black/5" />}>
@@ -25,6 +31,9 @@ async function Business({ searchParams }: { searchParams: Promise<Record<string,
   await connection();
   const owner = await requireOwner();
   const path = ownerPath(owner.handle);
+  const today = facilityNow().date;
+  const pause = pauseView(owner.pause, today);
+  const upcoming = (await listBookings({ ownerId: owner.id })).filter((b) => b.date >= today && holdsSlot(b) && !b.blocked).length;
 
   return (
     <div className="mt-8 space-y-6">
@@ -85,7 +94,16 @@ async function Business({ searchParams }: { searchParams: Promise<Record<string,
         </p>
       </section>
 
+      <PauseForm pause={pause} min={addDays(today, 1)} max={addDays(today, 365)} upcoming={upcoming} />
+
       <BusinessForm profile={owner.profile} />
     </div>
   );
+}
+
+/** The owner's pause as the form shows it, or null while the page is live (a pause past its reopening date counts as ended). */
+function pauseView(pause: PagePause | undefined, today: string): PauseView | null {
+  if (!pause || !isPaused(pause, today)) return null;
+  const since = new Date(pause.at).toLocaleDateString(platform.locale, { timeZone: platform.timeZone, dateStyle: "medium" });
+  return { message: pause.message, until: pause.until, sinceLabel: since, untilLabel: pause.until && formatDate(pause.until, { year: "numeric" }) };
 }

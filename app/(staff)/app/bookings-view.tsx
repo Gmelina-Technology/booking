@@ -13,6 +13,7 @@ import { ApproveAll, BookingActions, CopyReference, DayPicker, EraseCustomerButt
 import { CreateBooking, EditBooking, type BookableActivity } from "./create-booking";
 import { PageHeader } from "./page-header";
 import { matchesSearch, staffHref, parseQuery, sectionOf, type StaffQuery, type Section, type ViewKey } from "./query";
+import { PageBanners } from "./page-banners";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -27,6 +28,7 @@ export function BookingsPage({ searchParams, section }: { searchParams: SearchPa
   const [title, subtitle] = sectionTitles[section];
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
+      <PageBanners />
       <Suspense
         fallback={
           <>
