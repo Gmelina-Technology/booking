@@ -30,15 +30,15 @@ async function Business({ searchParams }: { searchParams: Promise<Record<string,
     <div className="mt-8 space-y-6">
       {welcome && (
         <div className="rounded-2xl border border-lime-300 bg-lime-50 p-5 text-sm">
-          <p className="font-semibold text-emerald-900">Your page is live 🎉</p>
+          <p className="font-semibold text-emerald-900">Your page is ready 🎉</p>
           <p className="mt-1 text-emerald-900/80">
-            Next: add your address and phone below, set your prices and courts in{" "}
-            <Link href="/app/activities" className="font-semibold underline">
-              Activities
-            </Link>
-            , and upload your payment QR in{" "}
+            Customers can request bookings once you&apos;ve added your payment QR or account number in{" "}
             <Link href="/app/settings" className="font-semibold underline">
               Payments &amp; alerts
+            </Link>
+            . Before you share the link: add your address and phone below, so customers can reach you, and check the prices and courts in{" "}
+            <Link href="/app/activities" className="font-semibold underline">
+              Activities
             </Link>
             . We started you off with a few sample activities. Edit or hide the ones you don&apos;t offer.
           </p>

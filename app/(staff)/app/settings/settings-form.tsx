@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import type { PaymentSettings } from "@/lib/facility";
+import { platform, type PaymentSettings } from "@/lib/facility";
 import { resizeImage } from "@/lib/resize-image";
 import { saveSettings, sendTestEmail } from "./actions";
 
@@ -61,9 +61,18 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
           </div>
           <p className="text-xs text-black/50">
             If the customer hasn&apos;t entered a payment reference in time, the booking is cancelled automatically, the slot is freed and the
-            customer is emailed. Requests you haven&apos;t approved or declined in time, or by their start time, are declined the same way.
-            Bookings you add yourself are never declined automatically.
+            customer is emailed. Requests you haven&apos;t approved or declined in time, or by their start time, are released the same way,
+            and you get an email about it. Bookings you add yourself are never released automatically.
           </p>
+          <Field
+            label="Customers can book (days ahead)"
+            name="bookingWindowDays"
+            type="number"
+            min={1}
+            max={platform.maxBookingWindowDays}
+            defaultValue={settings.bookingWindowDays}
+            required
+          />
           <label className="block text-sm">
             <span className="font-medium">Payment instructions</span>
             <textarea name="instructions" rows={3} maxLength={500} defaultValue={settings.instructions} className={inputClass} />
@@ -77,6 +86,10 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
             defaultValue={settings.staffNotifyEmail}
             placeholder="frontdesk@yourfacility.com (leave empty to turn off)"
           />
+          <p className="text-xs text-black/50">
+            Also gets an email when a customer cancels, or when a request or unpaid booking is released automatically. The bell in the
+            dashboard only alerts you while it&apos;s open, so keep an address here you check on your phone.
+          </p>
         </section>
 
         <aside className="space-y-4">

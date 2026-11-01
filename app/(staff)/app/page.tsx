@@ -6,7 +6,7 @@ import { getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
 import { formatHourRange, formatMoney } from "@/lib/facility";
 import { releaseOverdueHolds } from "@/lib/holds";
-import { firstMonths, growth, monthSales } from "@/lib/sales";
+import { firstMonths, growth, isSale, monthSales, revenueOf } from "@/lib/sales";
 import { holdsSlot, listBookings, type Booking } from "@/lib/store";
 import { addDays, facilityNow, formatDate, startOfWeek } from "@/lib/time";
 import { Court, StatusBadge, bookable } from "./bookings-view";
@@ -56,16 +56,17 @@ async function Overview({ searchParams }: { searchParams: Promise<Record<string,
   const calendar = parseQuery({}, today, () => false, "calendar");
   const openHref = (b: Booking) => staffHref(calendar, today, { mode: "day", date: b.date, booking: b.id });
 
-  const upcoming = all.filter((b) => b.date >= today);
-  const requests = upcoming.filter((b) => b.status === "pending").length;
-  const toVerify = upcoming.filter((b) => b.status === "awaiting_payment" && b.paymentRef).length;
-  const decisions = upcoming.filter(needsDecision).sort((a, b) => a.date.localeCompare(b.date) || a.startHour - b.startHour);
+  // Every date, not just upcoming: a payment reference nobody checked before the
+  // booking's day still needs a decision (those are never released automatically).
+  const requests = all.filter((b) => b.status === "pending").length;
+  const toVerify = all.filter((b) => b.status === "awaiting_payment" && b.paymentRef).length;
+  const decisions = all.filter(needsDecision).sort((a, b) => a.date.localeCompare(b.date) || a.startHour - b.startHour);
   const todays = all.filter((b) => b.date === today && holdsSlot(b)).sort((a, b) => a.startHour - b.startHour);
   const next = todays.find((b) => b.startHour + b.hours > now.hour);
   const weekStart = startOfWeek(today);
   const week = all.filter((b) => b.date >= weekStart && b.date <= addDays(weekStart, 6));
   const weekHours = week.filter(holdsSlot).reduce((n, b) => n + b.hours, 0);
-  const weekRevenue = week.filter((b) => b.status === "confirmed").reduce((n, b) => n + b.total, 0);
+  const weekRevenue = week.filter(isSale).reduce((n, b) => n + revenueOf(b), 0);
 
   // This year's sales by month, and the same stretch of last year to compare with.
   const year = today.slice(0, 4);
@@ -75,13 +76,13 @@ async function Overview({ searchParams }: { searchParams: Promise<Record<string,
   const yearRevenue = yearMonths.reduce((n, s) => n + s.revenue, 0);
   const lastYear = String(Number(year) - 1);
   const lastYearRevenue = played
-    .filter((b) => b.status === "confirmed" && b.date >= `${lastYear}-01-01` && b.date <= `${lastYear}${today.slice(4)}`)
-    .reduce((n, b) => n + b.total, 0);
+    .filter((b) => isSale(b) && b.date >= `${lastYear}-01-01` && b.date <= `${lastYear}${today.slice(4)}`)
+    .reduce((n, b) => n + revenueOf(b), 0);
 
   return (
     <>
       <PageHeader title="Overview" subtitle={formatDate(today, { weekday: "long", month: "long", year: "numeric" })}>
-        <CreateBooking q={calendar} today={today} activities={bookable(activities)} />
+        <CreateBooking q={calendar} today={today} nowHour={now.hour} activities={bookable(activities)} />
       </PageHeader>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -120,13 +121,13 @@ async function Overview({ searchParams }: { searchParams: Promise<Record<string,
                       <Link href={openHref(b)} className="truncate hover:underline">
                         {b.name}
                       </Link>
-                      <StatusBadge status={b.status} />
+                      <StatusBadge status={b.status} blocked={b.blocked} />
                     </p>
                     <p className="truncate text-xs text-black/50">
                       {formatDate(b.date)} · {formatHourRange(b.startHour, b.hours)} · <Court b={b} activity={activityBySlug.get(b.activitySlug)} />
                     </p>
                   </div>
-                  <BookingActions id={b.id} status={b.status} noDownpayment={!!activityBySlug.get(b.activitySlug)?.noDownpayment} />
+                  <BookingActions b={b} today={today} noDownpayment={!!activityBySlug.get(b.activitySlug)?.noDownpayment} />
                 </li>
               ))}
             </ul>
@@ -159,7 +160,7 @@ async function Overview({ searchParams }: { searchParams: Promise<Record<string,
                         <Court b={b} activity={activityBySlug.get(b.activitySlug)} />
                       </span>
                     </span>
-                    <StatusBadge status={b.status} />
+                    <StatusBadge status={b.status} blocked={b.blocked} />
                   </Link>
                 </li>
               ))}

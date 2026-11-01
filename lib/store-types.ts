@@ -12,7 +12,7 @@ import type { BusinessProfile } from "./facility";
  */
 export type BookingStatus = "pending" | "awaiting_payment" | "confirmed" | "cancelled";
 
-export type EmailKind = "payment_request" | "confirmed" | "cancelled";
+export type EmailKind = "payment_request" | "confirmed" | "cancelled" | "rescheduled" | "payment_retry";
 export type EmailLogEntry = { kind: EmailKind; at: string; ok: boolean; detail: string };
 
 export type Booking = {
@@ -38,17 +38,32 @@ export type Booking = {
   total: number;
   status: BookingStatus;
   createdAt: string;
-  /** Entered by staff (walk-in or phone), so never declined automatically as unreviewed. */
+  /** Entered by staff (walk-in or phone), so never released automatically: staff follow up themselves. */
   staffCreated?: boolean;
+  /** A court staff blocked (maintenance, private use). Always confirmed, with no customer, revenue or fee. */
+  blocked?: boolean;
   /** Amount due up front, fixed when staff approve the booking. */
   downpayment?: number;
   approvedAt?: string;
   /** Reference number the customer entered after paying (e.g. GCash ref). */
   paymentRef?: string;
   paymentSubmittedAt?: string;
+  /** Amount the customer says they paid, entered with the reference. */
+  paymentAmount?: number;
+  /** Receipt screenshot the customer uploaded with the reference (a name in the uploads store). */
+  paymentReceipt?: string;
+  /** When staff verified the downpayment. */
   paidAt?: string;
+  /** When staff recorded the whole total as paid (paid in full, or the balance collected at the venue). */
+  balancePaidAt?: string;
+  /** When staff marked a confirmed booking as a no-show. It stays confirmed, since the court was held. */
+  noShowAt?: string;
+  /** When staff last moved the booking to another time or court. */
+  rescheduledAt?: string;
   cancelledAt?: string;
   cancelReason?: string;
+  /** The customer cancelled it themselves from their booking page. */
+  cancelledByCustomer?: boolean;
   emails?: EmailLogEntry[];
   /** When staff erased the customer's personal details (name, email, phone, notes, payment reference). */
   erasedAt?: string;
@@ -77,7 +92,7 @@ export type Owner = {
 };
 
 /** What a staff notification is about (lib/notifications.ts). */
-export type NotificationKind = "new_request" | "payment_submitted" | "hold_released";
+export type NotificationKind = "new_request" | "payment_submitted" | "hold_released" | "customer_cancelled";
 
 /** One entry in the staff notification bell. */
 export type AppNotification = {
@@ -123,6 +138,13 @@ export type PlatformNotification = {
   readBy: string[];
 };
 
+/** Thrown by updateBooking() when the changed booking would overlap an active booking on the same court. */
+export class SlotTaken extends Error {
+  constructor() {
+    super("That court is already booked for part of that time.");
+  }
+}
+
 export type LoginFailure = { count: number; untilMs: number };
 
 export type InsertOwnerResult = "ok" | "handle_taken" | "email_taken";
@@ -148,7 +170,10 @@ export interface StoreBackend {
   findBooking(by: "id" | "accessToken", value: string): Promise<Booking | undefined>;
   /** Inserts the booking, or returns false if it overlaps an active booking on the same court. */
   insertBooking(booking: Booking): Promise<boolean>;
-  /** Atomically applies `change`; if `change` throws, nothing is written and the error propagates. */
+  /**
+   * Atomically applies `change`; if `change` throws, nothing is written and the error propagates.
+   * Throws SlotTaken if the changed booking would overlap another active booking on its court.
+   */
   updateBooking(id: string, change: (b: Booking) => void): Promise<Booking | null>;
 
   readDoc<T>(ownerId: string, kind: DocKind, fallback: T): Promise<T>;

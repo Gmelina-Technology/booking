@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getActiveActivities } from "@/lib/activities";
-import { formatHour, formatMoney, platform } from "@/lib/facility";
+import { formatHour, formatMoney } from "@/lib/facility";
 import { ownerFromParams, ownerPath } from "@/lib/owners";
 import Hero from "./hero";
 import PastEvents from "./past-events";
@@ -66,7 +66,7 @@ async function OwnerHomeContent({ params }: { params: Promise<{ handle: string }
         <div className="mx-auto grid max-w-6xl gap-6 px-4 py-12 sm:grid-cols-3 sm:gap-8 sm:py-16">
           {[
             ["1", "Pick a sport", `Everything ${owner.profile.name} offers, bookable online.`],
-            ["2", "Choose a slot", `See live availability for every court up to ${platform.bookingWindowDays} days ahead.`],
+            ["2", "Choose a slot", "See live availability for every court and pick the time that suits you."],
             ["3", "Pay & play", "Once approved, we email a QR code for the downpayment. Pay the balance at the front desk."],
           ].map(([n, title, body]) => (
             <div key={n} className="flex gap-4 sm:block">

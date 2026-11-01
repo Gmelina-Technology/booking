@@ -106,7 +106,9 @@ export async function deleteAccount(_prev: AccountState, form: FormData): Promis
 
   // Customers with bookings still to come must hear about it, which cancelling does.
   const today = facilityNow().date;
-  const upcoming = (await listBookings({ ownerId: owner.id })).filter((b) => holdsSlot(b) && b.date >= today);
+  const bookings = await listBookings({ ownerId: owner.id });
+  // Courts the owner blocked for themselves have no customer to tell.
+  const upcoming = bookings.filter((b) => holdsSlot(b) && !b.blocked && b.date >= today);
   if (upcoming.length > 0) {
     const n = upcoming.length;
     return {
@@ -116,7 +118,9 @@ export async function deleteAccount(_prev: AccountState, form: FormData): Promis
   }
 
   const [settings, hero, events] = await Promise.all([readSettings(owner.id), readHero(owner.id), readEvents(owner.id)]);
-  const uploads = [settings.qrPhoto, ...hero.library, ...events.map((e) => e.photo)].filter((n): n is string => !!n);
+  const uploads = [settings.qrPhoto, ...hero.library, ...events.map((e) => e.photo), ...bookings.map((b) => b.paymentReceipt)].filter(
+    (n): n is string => !!n,
+  );
 
   await deleteOwner(owner.id);
   // Files go after the records, so a failure here leaves unused files, never broken pages.

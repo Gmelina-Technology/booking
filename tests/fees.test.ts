@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { DEFAULT_RATE, feeFor, isCharged, monthlyStatement, resolveRate, type FeeRate, type FeeSchedule } from "@/lib/fees";
 
 const rate = (r: Partial<FeeRate>): FeeRate => ({ ...DEFAULT_RATE, id: Math.random().toString(36), createdAt: "2026-01-01T00:00:00Z", ...r });
-const booking = (r: Partial<{ id: string; date: string; startHour: number; hours: number; status: string }>) => ({
+const booking = (r: Partial<{ id: string; date: string; startHour: number; hours: number; status: string; blocked: boolean }>) => ({
   id: "B1",
   date: "2026-10-10",
   startHour: 8,
@@ -56,6 +56,8 @@ test("only confirmed bookings whose slot has ended are charged", () => {
   expect(isCharged(booking({ date: "2026-10-31", startHour: 10, hours: 2 }), now)).toBe(true);
   expect(isCharged(booking({ date: "2026-10-31", startHour: 11, hours: 2 }), now)).toBe(false);
   expect(isCharged(booking({ date: "2026-11-01" }), now)).toBe(false);
+  // A court the partner blocked for themselves has no customer to charge for.
+  expect(isCharged(booking({ blocked: true }), now)).toBe(false);
 });
 
 test("monthly statement totals the month's charged bookings", () => {

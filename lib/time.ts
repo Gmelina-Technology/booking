@@ -20,9 +20,9 @@ export function addDays(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** The dates customers can currently book, starting today. */
-export function bookableDates(today: string): string[] {
-  return Array.from({ length: platform.bookingWindowDays }, (_, i) => addDays(today, i));
+/** The dates customers can currently book, starting today. `days` is the business's booking window. */
+export function bookableDates(today: string, days: number = platform.bookingWindowDays): string[] {
+  return Array.from({ length: days }, (_, i) => addDays(today, i));
 }
 
 export function formatDate(date: string, opts: Intl.DateTimeFormatOptions = {}): string {

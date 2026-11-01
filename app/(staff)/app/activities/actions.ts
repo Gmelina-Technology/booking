@@ -33,6 +33,13 @@ function validate(input: ActivityInput): string | null {
   if (input.closeHour <= input.openHour) return "Closing time must be after opening time.";
   if (!int(input.maxHoursPerBooking) || input.maxHoursPerBooking < 1) return "Max hours per booking must be at least 1.";
   if (input.maxHoursPerBooking > input.closeHour - input.openHour) return "Max hours per booking is longer than the opening hours.";
+  if (input.closedDays && (input.closedDays.length > 6 || input.closedDays.some((d) => !int(d) || d < 0 || d > 6)))
+    return "Leave at least one day of the week open.";
+  if (input.peak) {
+    const { pricePerHour, fromHour, toHour } = input.peak;
+    if (!(pricePerHour >= 0)) return "Peak price must be 0 or more.";
+    if (!int(fromHour) || !int(toHour) || fromHour < 0 || toHour > 24 || toHour <= fromHour) return "Peak hours must end after they start.";
+  }
   if (!int(input.maxPlayers) || input.maxPlayers < 1) return "Max players must be at least 1.";
   if (!input.resourceLabel.trim()) return "Give courts a label, e.g. Court or Table.";
   if (input.resources.length === 0) return "Add at least one court.";
@@ -91,6 +98,10 @@ export async function saveActivity(originalSlug: string | null, input: ActivityI
     noDownpayment: !!input.noDownpayment,
     openHour: input.openHour,
     closeHour: input.closeHour,
+    closedDays: [...new Set(input.closedDays ?? [])].sort(),
+    peak: input.peak
+      ? { pricePerHour: Math.round(input.peak.pricePerHour), fromHour: input.peak.fromHour, toHour: input.peak.toHour, weekends: !!input.peak.weekends }
+      : null,
     maxHoursPerBooking: input.maxHoursPerBooking,
     maxPlayers: input.maxPlayers,
     resourceLabel: input.resourceLabel.trim(),

@@ -23,6 +23,8 @@ export async function saveBusiness(form: FormData): Promise<{ ok: boolean; messa
   };
   if (profile.name.length < 2) return { ok: false, message: "Enter your business name." };
   if (profile.email && !EMAIL.test(profile.email)) return { ok: false, message: "Contact email isn't valid." };
+  // Customers' booking pages and emails point them here to change or ask about a booking.
+  if (!profile.phone && !profile.email) return { ok: false, message: "Add a phone number or contact email, so customers can reach you." };
 
   const socials: SocialLinks = {};
   for (const net of socialNetworks) {

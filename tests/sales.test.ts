@@ -31,6 +31,16 @@ test("a month counts confirmed bookings only, plus how many were cancelled", () 
   expect(oct).toEqual({ month: "2026-10", revenue: 1300, bookings: 2, hours: 3, customers: 2, newCustomers: 1, cancelled: 1 });
 });
 
+test("a no-show only earns its downpayment, and blocked courts aren't sales", () => {
+  const all = [
+    booking({ total: 400 }),
+    booking({ total: 800, hours: 2, noShowAt: "2026-10-10T10:00:00Z", downpayment: 400, email: "ben@example.com" }),
+    booking({ total: 0, blocked: true, email: "" }),
+  ];
+  const oct = monthSales(all, "2026-10", firstMonths(all));
+  expect(oct).toMatchObject({ revenue: 800, bookings: 2, hours: 3, customers: 2 });
+});
+
 test("a customer is new only in the month of their first confirmed booking", () => {
   const all = [
     booking({ date: "2026-08-02", status: "cancelled", email: "cy@example.com" }),

@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { bookingEmailContext, logBookingEmail } from "./booking-mail";
-import { cancelledEmail } from "./emails";
+import { cancelledEmail, staffReleasedEmail } from "./emails";
 import type { PaymentSettings } from "./facility";
 import { sendMail } from "./mailer";
 import { notify } from "./notifications";
@@ -11,13 +11,16 @@ import { facilityNow } from "./time";
 
 // A booking holds its court while it waits on someone. Holds that have waited
 // too long are released: the booking is cancelled, the slot is freed, the
-// customer is emailed and staff get an in-app notification.
+// customer is emailed and staff get an in-app notification (and an email to
+// the staff alert address).
 //   - Approved but unpaid: once the payment window passes with no payment
 //     reference entered. With a reference, the customer says they've paid, so
 //     staff check and decide; those are never released automatically.
 //   - Requests staff haven't reviewed: once the request window passes, or the
-//     booking's start time arrives, whichever is first. Requests staff entered
-//     themselves (phone bookings) are left to staff.
+//     booking's start time arrives, whichever is first.
+// Bookings staff entered themselves (walk-ins, phone bookings) are never
+// released: the customer may have no email to be told, and staff collect
+// their payment in person.
 //
 // This runs wherever it matters, so a slot frees up the moment someone needs it:
 //   - when customers view or book a day (app/actions.ts), for that day
@@ -25,7 +28,7 @@ import { facilityNow } from "./time";
 //   - once a day for every business (app/api/cron/release-holds, vercel.json)
 
 export const UNPAID_REASON = "The payment window passed without a payment.";
-export const UNREVIEWED_REASON = "The business couldn't review your request in time, so the slot was released.";
+export const UNREVIEWED_REASON = "We couldn't confirm this slot in time, so it was released. Please pick another time, or contact us to book.";
 
 type Windows = Pick<PaymentSettings, "paymentWindowHours" | "requestWindowHours">;
 
@@ -37,11 +40,12 @@ function hasStarted(b: Pick<Booking, "date" | "startHour">, now: number) {
 
 /** Why this booking's hold should be released now, or null if it should stay. */
 export function expiryReason(b: Booking, windows: Windows, now = Date.now()): string | null {
+  if (b.staffCreated) return null;
   if (b.status === "awaiting_payment") {
     const overdue = !b.paymentRef && !!b.approvedAt && Date.parse(b.approvedAt) <= now - windows.paymentWindowHours * 3600_000;
     return overdue ? UNPAID_REASON : null;
   }
-  if (b.status === "pending" && !b.staffCreated) {
+  if (b.status === "pending") {
     const stale = Date.parse(b.createdAt) <= now - windows.requestWindowHours * 3600_000;
     return stale || hasStarted(b, now) ? UNREVIEWED_REASON : null;
   }
@@ -49,7 +53,7 @@ export function expiryReason(b: Booking, windows: Windows, now = Date.now()): st
 }
 
 /** Bookings that could ever expire: cheap check before reading the owner's settings. */
-const mayExpire = (b: Booking) => (b.status === "awaiting_payment" && !b.paymentRef) || (b.status === "pending" && !b.staffCreated);
+const mayExpire = (b: Booking) => !b.staffCreated && ((b.status === "awaiting_payment" && !b.paymentRef) || b.status === "pending");
 
 class StillHeld extends Error {}
 
@@ -96,6 +100,12 @@ export async function releaseOverdueHolds(ownerId: string, bookings?: Booking[])
       const result = await sendMail(cancelledEmail(await bookingEmailContext(ownerId, owner.profile, b, base)));
       await logBookingEmail(ownerId, b.id, "cancelled", result);
       if (!result.ok) console.error(`Release email for ${b.id} failed:`, result.detail);
+    }
+    // Staff may not have the dashboard open, so tell them by email too.
+    if (windows.staffNotifyEmail) {
+      const contexts = await Promise.all(cancelled.map((b) => bookingEmailContext(ownerId, owner.profile, b, base)));
+      const result = await sendMail(staffReleasedEmail(contexts, windows.staffNotifyEmail, `${base}/app/bookings?view=cancelled`));
+      if (!result.ok) console.error("Staff release email failed:", result.detail);
     }
   });
   return released;
