@@ -69,6 +69,7 @@ const adminGroups: Group[] = [
     label: "Platform",
     items: [
       { href: "/admin/partners", label: "Partners", icon: icons.users },
+      { href: "/admin/all-bookings", label: "All bookings", icon: icons.list },
       { href: "/admin/fees", label: "Partner fees", icon: icons.sliders },
     ],
   },

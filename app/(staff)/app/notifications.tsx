@@ -4,18 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getNotifications, markNotificationsRead, type NotificationFeed } from "./notification-actions";
-import type { AppNotification } from "@/lib/notifications";
 
 // The bell in the staff header. Polls for new notifications while the tab is
 // visible, and, if staff turn them on, shows them as desktop notifications
 // too. That preference is per browser (localStorage); the browser's own
-// permission prompt decides whether it can be turned on at all.
+// permission prompt decides whether it can be turned on at all. Each
+// notification links to what it is about (a booking, or a new partner).
 
 const POLL_MS = 30_000;
 const DESKTOP_KEY = "staff-desktop-alerts";
-
-/** Each notification opens its booking's details panel. */
-const href = (n: Pick<AppNotification, "bookingId">) => `/app/bookings?booking=${encodeURIComponent(n.bookingId)}`;
 
 function ago(iso: string, now: number) {
   const mins = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
@@ -65,7 +62,7 @@ export default function NotificationBell() {
     (next: NotificationFeed) => {
       setFeed(next);
       setNow(Date.now());
-      const fresh = seen.current ? next.items.filter((n) => !n.readAt && !seen.current!.has(n.id)) : [];
+      const fresh = seen.current ? next.items.filter((n) => !n.read && !seen.current!.has(n.id)) : [];
       seen.current = new Set(next.items.map((n) => n.id));
       if (fresh.length === 0) return;
       // Keep the inbox badge and any open booking list in step.
@@ -75,7 +72,7 @@ export default function NotificationBell() {
           const alert = new Notification(n.title, { body: n.body, tag: n.id });
           alert.onclick = () => {
             window.focus();
-            router.push(href(n));
+            router.push(n.href);
             alert.close();
           };
         }
@@ -176,20 +173,27 @@ export default function NotificationBell() {
               {feed.items.map((n) => (
                 <li key={n.id}>
                   <Link
-                    href={href(n)}
+                    href={n.href}
                     onClick={() => {
                       setOpen(false);
-                      if (!n.readAt) markRead([n.id]);
+                      if (!n.read) markRead([n.id]);
                     }}
-                    className={`flex gap-3 px-4 py-3 text-sm hover:bg-black/[0.03] ${n.readAt ? "" : "bg-blue-50/60"}`}
+                    className={`flex gap-3 px-4 py-3 text-sm hover:bg-black/[0.03] ${n.read ? "" : "bg-blue-50/60"}`}
                   >
-                    <span className={`mt-1.5 size-2 shrink-0 rounded-full ${n.readAt ? "bg-transparent" : "bg-blue-600"}`} aria-hidden />
+                    <span className={`mt-1.5 size-2 shrink-0 rounded-full ${n.read ? "bg-transparent" : "bg-blue-600"}`} aria-hidden />
                     <span className="min-w-0 flex-1">
-                      <span className={`block ${n.readAt ? "text-black/70" : "font-semibold"}`}>{n.title}</span>
+                      <span className={`block ${n.read ? "text-black/70" : "font-semibold"}`}>
+                        {n.platform && (
+                          <span className="mr-1.5 rounded bg-violet-100 px-1.5 py-0.5 align-[1px] text-[10px] font-semibold uppercase tracking-wide text-violet-800">
+                            Platform
+                          </span>
+                        )}
+                        {n.title}
+                      </span>
                       <span className="mt-0.5 block text-xs text-black/55">{n.body}</span>
                       <span className="mt-1 block text-xs text-black/40">{ago(n.at, now)}</span>
                     </span>
-                    {!n.readAt && <span className="sr-only">Unread</span>}
+                    {!n.read && <span className="sr-only">Unread</span>}
                   </Link>
                 </li>
               ))}

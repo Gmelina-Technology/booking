@@ -23,7 +23,7 @@ Checks (the same ones CI runs on every pull request, in `.github/workflows/ci.ym
 ```bash
 npm run lint
 npx next typegen && npx tsc --noEmit
-npm test        # Vitest: sessions, passwords, reset links, bookings, holds, rate limits, fees
+npm test        # Vitest: sessions, passwords, reset links, bookings, holds, rate limits, fees, platform admin
 npm run build
 ```
 
@@ -73,7 +73,7 @@ settings.
   menu groups bookings, catalog, the public page and settings. **Business profile** edits the name, tagline, address, phone and contact email shown on their page
   and in emails.
 - **Platform admin area** at `/admin`, for platform users only (`PLATFORM_ADMIN_EMAILS`, see
-  [Partner fees](#partner-fees)). Platform admins also have a partner account, so their dashboard
+  [Platform admin](#platform-admin)): partners, every partner's bookings, and fee rates. Platform admins also have a partner account, so their dashboard
   menu links to it. Anyone else gets a 404 on its pages, and a partner opening `/admin` itself is
   sent to `/app`. Old `/admin/<page>` links from before the dashboard moved redirect to `/app/<page>`
   (`redirects()` in `next.config.ts`).
@@ -115,7 +115,8 @@ requests, payment references customers enter, and holds released automatically, 
 count. Clicking one opens that booking. It checks for new ones every 30 seconds while the tab is
 open, and staff can turn on **desktop alerts** from the bell to get a browser notification as well
 (per browser, and only while a staff page is open). The latest 50 are kept per business, in the
-owner's `notifications` document.
+owner's `notifications` document. Platform admins also see the platform's notifications (new partners) in the
+same bell, marked **Platform** (see [New partner alerts](#new-partner-alerts)).
 
 **Holds are released automatically** (`lib/holds.ts`). The booking is cancelled, the slot is freed
 and the customer is emailed when:
@@ -180,6 +181,60 @@ dashboard (`/app`) as theirs. An amber bar on every staff page names the partner
 Every email sent is logged on the booking. A failed send shows in red in the staff view, and
 **Resend email** retries the payment request.
 
+## Platform admin
+
+Accounts whose email is in `PLATFORM_ADMIN_EMAILS` run the platform from `/admin`: partner fee rates
+and [viewing as a partner](#viewing-as-a-partner) (above), plus the alerts and pages below. Each of these
+pages and actions calls `requirePlatformAdmin()`; anyone else gets a 404.
+
+### New partner alerts
+
+When a new partner finishes signing up (after their email code), every platform admin is told
+(`lib/platform-notifications.ts`):
+
+- **In the bell:** "New partner: <business>" with their handle and email, marked **Platform**. Clicking
+  it opens the partner on `/admin/partners/<id>`. Notifications are shared by all admins (the latest
+  100), and each admin has their own read state.
+- **By email** to each address in `PLATFORM_ADMIN_EMAILS`, with a link to the partner. An admin
+  signing up their own business isn't emailed about it. Both are sent after the sign-up response, so
+  a slow mail server never holds up the new partner.
+
+### All bookings
+
+`/admin/all-bookings` lists every partner's bookings in one place, for keeping an eye on how partners
+are doing:
+
+- Filter by period (upcoming, today, last 30 days, a month, all time), partner, status, and a search
+  over reference, customer name, email and phone. Filters live in the URL, so a view can be shared.
+- Totals for the view, and a **By partner** table that puts partners with slow responses first.
+- Bookings waiting on their partner for more than 24 hours (a request not approved or declined, or a
+  payment reference not checked) are flagged **waiting** (`STALE_HOURS` in `lib/platform-stats.ts`).
+  Bookings staff added themselves never count as waiting.
+- The page is read-only. **Open** views as the partner, landing on that booking.
+- It shows the first 300 bookings of a view; narrow the filters for the rest.
+
+The path isn't `/admin/bookings` because that still redirects partners' old links to `/app/bookings`.
+
+### Managing partners
+
+`/admin/partners` lists every partner, newest first, with their upcoming and recent bookings, bookings
+waiting too long, and setup progress. Search by name, handle, email or phone, or filter to new partners
+(30 days), incomplete setup, slow to respond, or suspended. **Manage** opens a partner's page
+(`/admin/partners/<id>`): their details, fee rate, a setup checklist (payment QR, account details,
+contact phone, an open activity, a first booking), their latest bookings, and admin activity on their
+account.
+
+**Suspending a partner** takes their page offline, for example after complaints. The admin gives a
+reason, which the partner sees:
+
+- Their page returns 404, they leave the directory, and new booking requests are refused
+  (`getPublicOwners()` in `lib/owners.ts`, and `createBooking()`).
+- They can still sign in and look after the bookings they already have. A red notice in their staff
+  area gives the reason. Existing customers' booking links keep working.
+- The partner is emailed when suspended and when reinstated (**Reinstate page** on the same screen).
+- Platform admin accounts can't be suspended. Every suspension and reinstatement is logged (the latest
+  200) and shown with the view-as log under **Recent admin activity**.
+
 ## Pages
 
 | Route | What it does |
@@ -207,7 +262,9 @@ Every email sent is logged on the booking. A failed send shows in red in the sta
 | `/app/events` | Staff view: past events (with photos) shown on the business page |
 | `/app/banner` | Page design: the business page banner's template, text, photos, colours and buttons, with a live preview |
 | `/admin` | Platform admins only: the platform admin area (opens Partners). Partners who open it are sent to `/app` |
-| `/admin/partners` | Platform admins only: every partner, **View as** a partner, and the view-as log |
+| `/admin/partners` | Platform admins only: every partner with their activity and setup, search and filters, **View as**, and the admin activity log |
+| `/admin/partners/<id>` | Platform admins only: one partner's details, setup, latest bookings and history; suspend or reinstate their page |
+| `/admin/all-bookings` | Platform admins only: every partner's bookings, with filters, totals and bookings waiting too long |
 | `/admin/fees` | Platform admins only: platform and promo fee rates |
 
 The route folders are `app/(platform)/` (platform header and footer), `app/p/[handle]/` (the
@@ -311,10 +368,10 @@ information controller), and the platform processes them for it.
 - **Set `SESSION_SECRET`** on the host (see `.env.example`), and serve the site over HTTPS so the
   session cookie is only sent encrypted.
 - **Sign-up is open to anyone with a real email.** Emails are verified with a one-time code and
-  code requests are rate-limited, but there's no CAPTCHA, and platform admins can manage fee rates
-  and view as a partner but can't suspend or remove accounts. Add those before inviting the public.
-- **Set `PLATFORM_ADMIN_EMAILS`** to the accounts that may change partner fee rates and view as any
-  partner.
+  code requests are rate-limited, but there's no CAPTCHA, and platform admins can suspend a
+  partner's page but can't delete accounts. Add those before inviting the public.
+- **Set `PLATFORM_ADMIN_EMAILS`** to the accounts that may change partner fee rates, view as and
+  suspend any partner, and see every booking. They also get an email for each new partner.
 - **Set up SMTP before opening sign-up.** Without it, verification codes can't be sent on Vercel
   and nobody can sign up.
 - **Fill in the legal details and review the wording.** Set `operator`, `privacyEmail` and

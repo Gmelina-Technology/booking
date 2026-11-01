@@ -53,6 +53,7 @@ DO $$ BEGIN
 END $$;
 DROP INDEX IF EXISTS bookings_date_idx;
 CREATE INDEX IF NOT EXISTS bookings_owner_date_idx ON bookings (owner_id, date, start_hour);
+CREATE INDEX IF NOT EXISTS bookings_platform_date_idx ON bookings (date, start_hour);
 
 CREATE TABLE IF NOT EXISTS documents (
   key   text PRIMARY KEY,
@@ -217,6 +218,18 @@ export const postgresStore: StoreBackend = {
       WHERE owner_id = ${ownerId}
         AND (${activitySlug ?? null}::text IS NULL OR activity_slug = ${activitySlug ?? null})
         AND (${date ?? null}::text IS NULL OR date = ${date ?? null})
+        AND (${status ?? null}::text IS NULL OR status = ${status ?? null})
+      ORDER BY date, start_hour`;
+    return rows.map((r) => r.data);
+  },
+
+  async listPlatformBookings({ ownerId, from, to, status }) {
+    const q = await db();
+    const rows = await q<Row[]>`
+      SELECT data FROM bookings
+      WHERE (${ownerId ?? null}::text IS NULL OR owner_id = ${ownerId ?? null})
+        AND (${from ?? null}::text IS NULL OR date >= ${from ?? null})
+        AND (${to ?? null}::text IS NULL OR date <= ${to ?? null})
         AND (${status ?? null}::text IS NULL OR status = ${status ?? null})
       ORDER BY date, start_hour`;
     return rows.map((r) => r.data);
