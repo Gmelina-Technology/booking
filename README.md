@@ -269,7 +269,7 @@ Custom banners have these actions:
 | Action | Button | What it does |
 |--------|--------|--------------|
 | Agree to the per-booking fee | **I agree** | Records the partner's agreement to the fee terms. The banner shows their rate, and any scheduled change to it. |
-| Notify the platform team (in-app only) | **Notify the team** | Tells platform admins in their bell ("<business> responded: <title>"), with no email, e.g. for "Want help setting up?". |
+| Notify the platform team | **Notify the team** | Tells platform admins in their bell ("<business> responded: <title>") and emails each address in `PLATFORM_ADMIN_EMAILS` with the partner's details and a link to them, e.g. for "Want help setting up?". |
 
 Either kind can have a link to a page with more detail, a style (info or important), a last day, and
 an audience of partners who joined before a date. **End** stops showing a banner; ended ones stay

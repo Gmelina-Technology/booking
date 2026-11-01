@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { describePartnerRate } from "./fee-text";
-import { MAX_KEPT } from "./platform-notifications";
-import { readFeeSchedule, readPageBanners, updateOwner, updatePageBanners, updatePlatformNotifications, type Owner } from "./store";
+import { notifyBannerResponse } from "./platform-notifications";
+import { readFeeSchedule, readPageBanners, updateOwner, updatePageBanners, type Owner } from "./store";
 import type { PageBanner, PageBannerAction } from "./store-types";
 import { facilityNow } from "./time";
 
@@ -30,7 +30,17 @@ type ActionDef = {
   accountHolderOnly: boolean;
   /** A line for this partner under the banner's text, e.g. their rate. */
   detail?: (owner: Owner) => Promise<string | null>;
-  run: (owner: Owner, banner: PageBanner) => Promise<void>;
+  run: (owner: Owner, banner: PageBanner, ctx: ActionContext) => Promise<void>;
+};
+
+/** What an action may need from the request that ran it (see page-banner-actions.ts). */
+export type ActionContext = {
+  /** The site's address, for links in emails. */
+  baseUrl: string;
+  /** PLATFORM_ADMIN_EMAILS. */
+  adminEmails: string[];
+  /** Runs `task` once the response is sent (Next's after()). */
+  after: (task: () => Promise<void>) => void;
 };
 
 export const BANNER_ACTIONS: Record<PageBannerAction, ActionDef> = {
@@ -48,32 +58,20 @@ export const BANNER_ACTIONS: Record<PageBannerAction, ActionDef> = {
     },
   },
   // Asks partners to respond (e.g. "Want help setting up?"). Platform admins
-  // get it in their bell only, no email. The banner hides once they respond.
+  // get it in their bell and by email. The banner hides once they respond.
   "notify-platform": {
-    label: "Notify the platform team (in-app only)",
+    label: "Notify the platform team",
     button: "Notify the team",
     done: "Thanks, the CourtHub team has been notified.",
     pending: (o, b) => !b.dismissedBy.includes(o.id),
     accountHolderOnly: true,
-    run: async (o, b) => {
-      await updatePlatformNotifications((all) =>
-        [
-          {
-            id: randomBytes(6).toString("hex"),
-            kind: "banner_response" as const,
-            ownerId: o.id,
-            title: `${o.profile.name} responded: ${b.title}`,
-            body: `@${o.handle} · ${o.email}`,
-            at: new Date().toISOString(),
-            readBy: [],
-          },
-          ...all,
-        ].slice(0, MAX_KEPT),
-      );
+    run: async (o, b, ctx) => {
       await updatePageBanners(builtInBanners(), (all) => {
         const banner = all.find((x) => x.id === b.id);
         if (banner && !banner.dismissedBy.includes(o.id)) banner.dismissedBy.push(o.id);
       });
+      // After the response, so a slow mail server never holds up the partner's click.
+      ctx.after(() => notifyBannerResponse(o, b.title, ctx.adminEmails, ctx.baseUrl));
     },
   },
 };
@@ -141,11 +139,11 @@ export function dismissBanner(id: string, owner: Owner): Promise<BannerResult> {
 }
 
 /** Runs a custom banner's action for the partner, if it's one they're shown. Callers check `accountHolderOnly`. */
-export async function runBannerAction(id: string, owner: Owner): Promise<BannerResult> {
+export async function runBannerAction(id: string, owner: Owner, ctx: ActionContext): Promise<BannerResult> {
   const b = (await bannersFor(owner)).find((x) => x.id === id);
   if (!b || b.kind !== "custom" || !b.action) return { ok: false, message: "That's already done." };
   const action = BANNER_ACTIONS[b.action];
-  await action.run(owner, b);
+  await action.run(owner, b, ctx);
   return { ok: true, message: action.done };
 }
 

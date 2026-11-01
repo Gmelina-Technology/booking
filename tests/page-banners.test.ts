@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -35,6 +35,11 @@ async function newOwner(handle: string, feeTermsAcceptedAt?: string) {
   return owner!;
 }
 
+/** Runs after() tasks right away, so tests can wait for them with `settle()`. */
+const tasks: Promise<void>[] = [];
+const ctx = (adminEmails: string[] = []) => ({ baseUrl: "https://example.test", adminEmails, after: (t: () => Promise<void>) => void tasks.push(t()) });
+const settle = () => Promise.all(tasks.splice(0));
+
 const generic = { kind: "generic", tone: "info", title: "Maintenance", body: "Sunday 2am.", createdBy: "admin@example.test" } as const;
 
 describe("page banners", () => {
@@ -45,12 +50,12 @@ describe("page banners", () => {
     expect((await banners.bannersFor(old)).map((b) => b.id)).toEqual(["fee-terms"]);
     expect(await banners.bannersFor(fresh)).toEqual([]);
 
-    const r = await banners.runBannerAction("fee-terms", old);
+    const r = await banners.runBannerAction("fee-terms", old, ctx());
     expect(r.ok).toBe(true);
     const after = (await store.getOwnerById(old.id))!;
     expect(after.feeTermsAcceptedAt).toBeTruthy();
     expect(await banners.bannersFor(after)).toEqual([]);
-    expect((await banners.runBannerAction("fee-terms", after)).ok).toBe(false);
+    expect((await banners.runBannerAction("fee-terms", after, ctx())).ok).toBe(false);
   });
 
   it("shows the partner's rate as the platform changes it", async () => {
@@ -69,19 +74,27 @@ describe("page banners", () => {
     });
   });
 
-  it("tells platform admins in-app when a partner responds, then hides for that partner", async () => {
+  it("tells platform admins in the bell and by email when a partner responds, then hides for that partner", async () => {
     const a = await newOwner("helpme", new Date().toISOString());
     const b = await newOwner("fine", new Date().toISOString());
     const banner = await banners.addBanner({ kind: "custom", tone: "info", title: "Want help?", body: "We'll reach out.", action: "notify-platform", createdBy: "admin@example.test" });
 
     expect((await banners.bannersFor(a)).map((x) => x.id)).toEqual([banner.id]);
-    expect((await banners.runBannerAction(banner.id, a)).ok).toBe(true);
+    expect((await banners.runBannerAction(banner.id, a, ctx(["boss@example.test", a.email]))).ok).toBe(true);
+    await settle();
     expect(await banners.bannersFor(a)).toEqual([]);
     expect((await banners.bannersFor(b)).map((x) => x.id)).toEqual([banner.id]);
 
     const [n] = await store.readPlatformNotifications();
     expect(n).toMatchObject({ kind: "banner_response", ownerId: a.id, title: "helpme courts responded: Want help?" });
-    expect((await banners.runBannerAction(banner.id, a)).ok).toBe(false);
+    // Emailed to every admin but the partner themselves (an admin's own business).
+    const sent = (await readdir(path.join(dir, "data", "outbox"))).filter((f) => f.includes("boss") || f.includes("helpme"));
+    expect(sent).toHaveLength(1);
+    const mail = await readFile(path.join(dir, "data", "outbox", sent[0]), "utf8");
+    expect(mail).toContain("Want help?");
+    expect(mail).toContain(`https://example.test/admin/partners/${a.id}`);
+
+    expect((await banners.runBannerAction(banner.id, a, ctx())).ok).toBe(false);
     await banners.endBanner(banner.id);
   });
 

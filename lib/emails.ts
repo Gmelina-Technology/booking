@@ -382,6 +382,37 @@ ${button(link, "Open in Partners")}
   };
 }
 
+/** To each platform admin when a partner presses "Notify the team" on a page banner titled `banner`. */
+export function bannerResponseEmail(to: string, owner: Owner, banner: string, link: string): Mail {
+  const rows = [
+    ["Business", owner.profile.name],
+    ["Page", `@${owner.handle}`],
+    ["Sign-in email", owner.email],
+    ["Phone", owner.profile.phone || "Not set"],
+  ];
+  return {
+    to,
+    subject: `${owner.profile.name} responded: ${banner}`,
+    html: layout(
+      platformBrand(),
+      "A partner responded to a banner",
+      "#1d4ed8",
+      `<p>${esc(owner.profile.name)} pressed <strong>Notify the team</strong> on the banner “${esc(banner)}”.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px">
+${rows
+  .map(
+    ([k, v]) =>
+      `<tr><td style="padding:8px 0;color:#6b7280;border-bottom:1px solid #eef0ec">${esc(k)}</td><td style="padding:8px 0;text-align:right;font-weight:600;border-bottom:1px solid #eef0ec">${esc(v)}</td></tr>`,
+  )
+  .join("\n")}
+</table>
+${button(link, "Open in Partners")}
+<p style="font-size:13px;color:#6b7280">You get this because your account is a platform admin.</p>`,
+    ),
+    text: `${owner.profile.name} pressed "Notify the team" on the banner "${banner}".\n\n${rows.map(([k, v]) => `${k}: ${v}`).join("\n")}\n\nOpen in Partners: ${link}\n`,
+  };
+}
+
 /** To a partner when a platform admin suspends their page (`reason`) or puts it back online (null). */
 export function partnerStatusEmail(to: string, business: string, reason: string | null): Mail {
   const heading = reason ? "Your booking page is suspended" : "Your booking page is back online";
