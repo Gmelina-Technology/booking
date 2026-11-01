@@ -7,7 +7,7 @@ import { requireOwner } from "@/lib/auth";
 import { platform, type PaymentSettings } from "@/lib/facility";
 import { facilityNow, isValidDate } from "@/lib/time";
 import { esc } from "@/lib/emails";
-import { sendMail, smtpConfigured, type MailResult } from "@/lib/mailer";
+import { sendMail, type MailResult } from "@/lib/mailer";
 import { deleteUpload, readSettings, saveUpload, UPLOAD_TYPES, writeSettings } from "@/lib/store";
 
 // Every action here is staff-only: each one starts with requireOwner() and is scoped to that owner.
@@ -91,11 +91,10 @@ export async function removeClosure(id: string): Promise<void> {
 export async function sendTestEmail(to: string): Promise<MailResult> {
   const owner = await requireOwner();
   if (!EMAIL.test(to.trim())) return { ok: false, detail: "Enter a valid email address." };
-  const result = await sendMail({
+  return sendMail({
     to: to.trim(),
     subject: `Test email from ${owner.profile.name}`,
     html: `<p>This is a test email from the ${esc(owner.profile.name)} booking system. If you can read it, email is working.</p>`,
     text: `This is a test email from the ${owner.profile.name} booking system. If you can read it, email is working.`,
   });
-  return { ...result, detail: smtpConfigured() ? result.detail : `${result.detail} (set SMTP_* env vars to send for real)` };
 }

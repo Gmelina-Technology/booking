@@ -112,10 +112,35 @@ export function feeFor(rate: FeePricing, hours: number): number {
   return rate.capPerBooking === null ? fee : Math.min(fee, rate.capPerBooking);
 }
 
+/**
+ * The rates that can apply to one partner's bookings, with admin notes and authors
+ * stripped, so the public booking widget can show the fee without seeing other partners' promos.
+ */
+export function partnerSchedule(schedule: FeeSchedule, ownerId: string): FeeSchedule {
+  return {
+    rates: schedule.rates
+      .filter((r) => r.scope === "platform" || r.ownerId === ownerId)
+      .map((r) => {
+        const copy = { ...r, createdBy: "" };
+        delete copy.note;
+        return copy;
+      }),
+  };
+}
+
 type BillableBooking = { id: string; date: string; startHour: number; hours: number; status: string; blocked?: boolean };
 
 /** A confirmed customer booking. Courts staff blocked for themselves are never charged. */
 const billable = (b: BillableBooking) => b.status === "confirmed" && !b.blocked;
+
+/**
+ * What a booking will be charged once confirmed and played, at the rate for its date,
+ * so staff see it before approving. Null for blocks and cancelled bookings, which are never charged.
+ */
+export function bookingFee(schedule: FeeSchedule, ownerId: string, b: Pick<BillableBooking, "date" | "hours" | "status" | "blocked">): number | null {
+  if (b.blocked || b.status === "cancelled") return null;
+  return feeFor(resolveRate(schedule, ownerId, b.date), b.hours);
+}
 
 /**
  * Billable and its time slot is over. `now` is the facility's local date and hour.

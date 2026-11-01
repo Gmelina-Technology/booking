@@ -139,7 +139,7 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
         <p className="mt-1 text-sm text-black/60">
           {smtp
             ? "SMTP is set up. Emails are sent for real."
-            : "SMTP isn't set up yet, so emails are saved to data/outbox on the server instead of being sent. Set the SMTP_* environment variables (see .env.example)."}
+            : "SMTP isn't set up yet, so emails are saved on the server instead of being sent. Set the SMTP_* environment variables (see .env.example)."}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <input

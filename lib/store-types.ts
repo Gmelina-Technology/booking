@@ -36,7 +36,13 @@ export type Booking = {
   phone: string;
   players: number;
   notes: string;
+  /** What the customer pays, including `bookingFee`. */
   total: number;
+  /**
+   * The platform's booking fee the customer pays on top of the price (lib/fees.ts), already in `total`.
+   * Set on customer requests; missing on staff-created bookings, where the partner covers the fee.
+   */
+  bookingFee?: number;
   status: BookingStatus;
   createdAt: string;
   /** Entered by staff (walk-in or phone), so never released automatically: staff follow up themselves. */

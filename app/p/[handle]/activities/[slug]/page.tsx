@@ -4,9 +4,10 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getActivity } from "@/lib/activities";
 import { formatHour, formatMoney, paymentReady } from "@/lib/facility";
+import { partnerSchedule } from "@/lib/fees";
 import { getPublicOwner, ownerFromParams, ownerPath } from "@/lib/owners";
 import { WEEKDAY_NAMES } from "@/lib/schedule";
-import { readSettings } from "@/lib/store";
+import { readFeeSchedule, readSettings } from "@/lib/store";
 import PausedNotice, { pausedNow } from "../../paused-notice";
 import BookingWidget from "./booking-widget";
 
@@ -29,7 +30,7 @@ async function ActivityContent({ params }: { params: Promise<{ handle: string; s
   const owner = await ownerFromParams(params);
   const activity = await getActivity(owner.id, (await params).slug);
   if (!activity || !activity.active) notFound();
-  const [settings, paused] = await Promise.all([readSettings(owner.id), pausedNow(owner)]);
+  const [settings, paused, fees] = await Promise.all([readSettings(owner.id), pausedNow(owner), readFeeSchedule()]);
 
   return (
     <>
@@ -57,6 +58,7 @@ async function ActivityContent({ params }: { params: Promise<{ handle: string; s
           <BookingWidget
             ownerId={owner.id}
             bookingWindowDays={settings.bookingWindowDays}
+            fees={partnerSchedule(fees, owner.id)}
             activity={{
               slug: activity.slug,
               name: activity.name,

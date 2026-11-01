@@ -83,6 +83,18 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
             <dd className="text-right font-medium">{v}</dd>
           </div>
         ))}
+        {!!booking.bookingFee && (
+          <>
+            <div className="flex justify-between py-3">
+              <dt className="text-black/50">Price</dt>
+              <dd className="font-medium">{formatMoney(booking.total - booking.bookingFee)}</dd>
+            </div>
+            <div className="flex justify-between py-3">
+              <dt className="text-black/50">Booking fee</dt>
+              <dd className="font-medium">{formatMoney(booking.bookingFee)}</dd>
+            </div>
+          </>
+        )}
         <div className="flex justify-between py-3">
           <dt className="text-black/50">Total</dt>
           <dd className="font-semibold">{formatMoney(booking.total)}</dd>

@@ -4,6 +4,10 @@ import nodemailer, { type Transporter } from "nodemailer";
 
 export type MailImage = { cid: string; filename: string; content: Buffer; contentType: string };
 export type Mail = { to: string; replyTo?: string; subject: string; html: string; text: string; images?: MailImage[] };
+/**
+ * `detail` is shown to partners (toasts, a booking's email log), so it stays generic: never the
+ * recipient, a server path or the SMTP error. Those go to the server log only.
+ */
 export type MailResult = { ok: boolean; detail: string };
 
 const OUTBOX_DIR = path.join(process.cwd(), "data", "outbox");
@@ -31,7 +35,10 @@ function getTransport() {
 /** Sends an email. Never throws: failures are returned so staff can see and retry. */
 export async function sendMail(mail: Mail): Promise<MailResult> {
   if (!smtpConfigured()) {
-    if (process.env.VERCEL) return { ok: false, detail: `Email isn't set up (SMTP_HOST is missing), so nothing was sent to ${mail.to}.` };
+    if (process.env.VERCEL) {
+      console.error("sendMail: SMTP_HOST is missing, nothing was sent");
+      return { ok: false, detail: "Email not sent: email delivery isn't set up" };
+    }
     return saveToOutbox(mail);
   }
   try {
@@ -44,10 +51,10 @@ export async function sendMail(mail: Mail): Promise<MailResult> {
       text: mail.text,
       attachments: mail.images?.map((img) => ({ ...img })),
     });
-    return { ok: true, detail: `Sent to ${mail.to}` };
+    return { ok: true, detail: "Email sent" };
   } catch (err) {
     console.error("sendMail failed", err);
-    return { ok: false, detail: `Couldn't send to ${mail.to}: ${err instanceof Error ? err.message : String(err)}` };
+    return { ok: false, detail: "Email couldn't be sent" };
   }
 }
 
@@ -65,5 +72,6 @@ async function saveToOutbox(mail: Mail): Promise<MailResult> {
     path.join(OUTBOX_DIR, file),
     `<!-- To: ${mail.to}\n     Subject: ${mail.subject} -->\n${html}`,
   );
-  return { ok: true, detail: `SMTP not set up, so the email was saved to data/outbox/${file}` };
+  console.info(`sendMail: SMTP not set up, saved to data/outbox/${file}`);
+  return { ok: true, detail: "Email saved, not sent: email delivery isn't set up" };
 }
