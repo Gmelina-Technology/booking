@@ -12,7 +12,7 @@ import { DayStrip, DayTimeline, Legend, MonthGrid, WeekGrid, hourRange, type Col
 import { ApproveAll, BookingActions, CopyReference, DayPicker, EraseCustomerButton, ModeSelect, Toolbar } from "./controls";
 import { CreateBooking, EditBooking, type BookableActivity } from "./create-booking";
 import { PageHeader } from "./page-header";
-import { matchesSearch, staffHref, parseQuery, sectionOf, type StaffQuery, type Section, type ViewKey } from "./query";
+import { matchesSearch, pageOf, staffHref, parseQuery, sectionOf, type StaffQuery, type Section, type ViewKey } from "./query";
 import { PageBanners } from "./page-banners";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -298,6 +298,7 @@ function TableView({
     : bookings.filter((b) => b.date === q.date).sort((a, b) => a.startHour - b.startHour);
   const active = rows.filter((b) => holdsSlot(b) && !b.blocked);
   const confirmed = rows.filter(isSale);
+  const paged = pageOf(rows, q.page);
 
   return (
     <>
@@ -376,7 +377,7 @@ function TableView({
           <>
             {/* Phones and tablets: one stacked card per booking. */}
             <ul className="divide-y divide-black/5 lg:hidden">
-              {rows.map((b) => (
+              {paged.rows.map((b) => (
                 <li key={b.id}>
                   <BookingCard {...rowProps(b, !isSchedule)} />
                 </li>
@@ -398,15 +399,46 @@ function TableView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5">
-                {rows.map((b) => (
+                {paged.rows.map((b) => (
                   <BookingRow key={b.id} {...rowProps(b, !isSchedule)} />
                 ))}
               </tbody>
             </table>
+            {paged.pages > 1 && <Pager {...paged} total={rows.length} href={(page) => staffHref(q, today, { page })} />}
           </>
         )}
       </div>
     </>
+  );
+}
+
+function Pager({ page, pages, from, to, total, href }: { page: number; pages: number; from: number; to: number; total: number; href: (page: number) => string }) {
+  const btn = "px-3 py-2 text-sm font-medium";
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/5 px-4 py-3">
+      <p className="text-sm text-black/50">
+        {from}–{to} of {total}
+      </p>
+      <nav className="flex divide-x divide-black/10 overflow-hidden rounded-lg border border-black/10" aria-label="Pages">
+        {page > 1 ? (
+          <Link href={href(page - 1)} className={`${btn} hover:bg-black/[0.03]`}>
+            ‹ Prev
+          </Link>
+        ) : (
+          <span className={`${btn} text-black/30`}>‹ Prev</span>
+        )}
+        <span className={`${btn} text-black/50`} aria-current="page">
+          Page {page} of {pages}
+        </span>
+        {page < pages ? (
+          <Link href={href(page + 1)} className={`${btn} hover:bg-black/[0.03]`}>
+            Next ›
+          </Link>
+        ) : (
+          <span className={`${btn} text-black/30`}>Next ›</span>
+        )}
+      </nav>
+    </div>
   );
 }
 

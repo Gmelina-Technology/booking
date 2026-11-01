@@ -37,7 +37,15 @@ export type StaffQuery = {
   search: string;
   /** An empty calendar slot that was clicked, `slug~resourceId~hour`: opens the booking form there. */
   slot: string;
+  /** Table page, from 1. Back to 1 whenever the list itself changes (tab, filter, search). */
+  page: number;
 };
+
+/** Rows per table page. */
+export const PAGE_SIZE = 50;
+
+/** Query fields that change which rows the table lists; changing any of them starts again at page 1. */
+const LIST_FIELDS = ["mode", "view", "date", "activity", "past", "search"] as const;
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -77,7 +85,19 @@ export function parseQuery(sp: SearchParams, today: string, isActivity: (slug: s
     booking: /^[A-Z0-9]{4,16}$/.test(str(sp.booking)) ? str(sp.booking) : "",
     search: str(sp.q).trim().slice(0, 80),
     slot: /^[a-z0-9-]{1,60}~[A-Za-z0-9-]{1,60}~\d{1,2}$/.test(str(sp.slot)) ? str(sp.slot) : "",
+    page: /^[1-9]\d{0,5}$/.test(str(sp.page)) ? Number(sp.page) : 1,
   };
+}
+
+/**
+ * One page of `rows`. A page past the end (say, after approving the last
+ * requests on it) shows the last page instead of an empty table.
+ */
+export function pageOf<T>(rows: T[], page: number, size = PAGE_SIZE) {
+  const pages = Math.max(1, Math.ceil(rows.length / size));
+  const current = Math.min(Math.max(1, page), pages);
+  const start = (current - 1) * size;
+  return { rows: rows.slice(start, start + size), page: current, pages, from: start + 1, to: Math.min(start + size, rows.length) };
 }
 
 /** Whether a booking matches the search text (case and spacing ignored for phone numbers). */
@@ -100,10 +120,12 @@ export function matchesSearch(
 
 /**
  * `/app/<section>?…` for the query with `changes` applied. Any open booking
- * closes unless `changes` names one. Defaults are left out to keep URLs short.
+ * closes unless `changes` names one, and changing what's listed goes back to
+ * page 1. Defaults are left out to keep URLs short.
  */
 export function staffHref(q: StaffQuery, today: string, changes: Partial<StaffQuery> = {}) {
-  const n = { ...q, booking: "", slot: "", ...changes };
+  const page = LIST_FIELDS.some((k) => k in changes) ? 1 : q.page;
+  const n = { ...q, booking: "", slot: "", page, ...changes };
   const section = sectionOf(n);
   const defaultView = section === "inbox" ? "requests" : "all";
   const params = new URLSearchParams();
@@ -116,6 +138,7 @@ export function staffHref(q: StaffQuery, today: string, changes: Partial<StaffQu
   if (n.booking) params.set("booking", n.booking);
   if (n.search && section !== "calendar") params.set("q", n.search);
   if (n.slot) params.set("slot", n.slot);
+  if (n.page > 1 && section !== "calendar") params.set("page", String(n.page));
   const s = params.toString();
   return `/app/${section}${s ? `?${s}` : ""}`;
 }
