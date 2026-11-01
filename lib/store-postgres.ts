@@ -1,5 +1,17 @@
 import postgres from "postgres";
-import { SlotTaken, type Booking, type DocKind, type PlatformDocKind, type InsertOwnerResult, type LoginFailure, type Owner, type StoreBackend } from "./store-types";
+import { STALE_HOURS } from "./platform-stats";
+import {
+  SlotTaken,
+  type Booking,
+  type DocKind,
+  type PlatformBookingFilter,
+  type PlatformDocKind,
+  type InsertOwnerResult,
+  type LoginFailure,
+  type Owner,
+  type StoreBackend,
+} from "./store-types";
+import { addDays } from "./time";
 
 // Postgres storage for production (e.g. Neon via the Vercel Marketplace).
 // Enabled when DATABASE_URL (or POSTGRES_URL) is set.
@@ -146,6 +158,42 @@ function columns(b: Booking) {
 
 const EXCLUSION_VIOLATION = "23P01";
 
+/** A booking waiting on its partner (the SQL twin of waitingSince() in lib/platform-stats.ts). */
+const isWaiting = (q: postgres.Sql) => q`
+  ((status = 'pending' AND NOT coalesce((data->>'staffCreated')::boolean, false))
+    OR (status = 'awaiting_payment' AND coalesce(data->>'paymentRef', '') <> ''))`;
+
+/** When a waiting booking started waiting. */
+const waitingSince = (q: postgres.Sql) => q`(CASE WHEN status = 'pending' THEN created_at ELSE coalesce(data->>'paymentSubmittedAt', created_at) END)`;
+
+/** The WHERE clause for a platform admin's filter (the SQL twin of inPlatformFilter() in store-file.ts). */
+function platformWhere(q: postgres.Sql, { ownerId, from, to, status, waiting, search }: PlatformBookingFilter) {
+  const text = search?.trim().toLowerCase() || null;
+  return q`
+    WHERE (${ownerId ?? null}::text IS NULL OR owner_id = ${ownerId ?? null})
+      AND (${from ?? null}::text IS NULL OR date >= ${from ?? null})
+      AND (${to ?? null}::text IS NULL OR date <= ${to ?? null})
+      AND (${status ?? null}::text IS NULL OR status = ${status ?? null})
+      AND (NOT ${!!waiting}::boolean OR ${isWaiting(q)})
+      AND (${text}::text IS NULL
+        OR strpos(lower(id), ${text}) > 0
+        OR strpos(lower(data->>'name'), ${text}) > 0
+        OR strpos(lower(data->>'email'), ${text}) > 0
+        OR strpos(lower(data->>'phone'), ${text}) > 0)`;
+}
+
+type SummaryRow = {
+  owner_id: string | null;
+  total: number;
+  upcoming: number;
+  recent: number;
+  waiting: number;
+  stale: number;
+  cancelled: number;
+  confirmed_value: number;
+  last_booking_at: string | null;
+};
+
 export const postgresStore: StoreBackend = {
   async listOwners() {
     const q = await db();
@@ -223,16 +271,54 @@ export const postgresStore: StoreBackend = {
     return rows.map((r) => r.data);
   },
 
-  async listPlatformBookings({ ownerId, from, to, status }) {
+  async listPlatformBookings(filter) {
     const q = await db();
+    // The id breaks ties, so pages don't shuffle bookings at the same hour between them.
     const rows = await q<Row[]>`
       SELECT data FROM bookings
-      WHERE (${ownerId ?? null}::text IS NULL OR owner_id = ${ownerId ?? null})
-        AND (${from ?? null}::text IS NULL OR date >= ${from ?? null})
-        AND (${to ?? null}::text IS NULL OR date <= ${to ?? null})
-        AND (${status ?? null}::text IS NULL OR status = ${status ?? null})
-      ORDER BY date, start_hour`;
+      ${platformWhere(q, filter)}
+      ${filter.newestFirst ? q`ORDER BY date DESC, start_hour DESC, id DESC` : q`ORDER BY date, start_hour, id`}
+      LIMIT ${filter.limit ?? null} OFFSET ${filter.offset ?? 0}`;
     return rows.map((r) => r.data);
+  },
+
+  async countPlatformBookings(filter) {
+    const q = await db();
+    const [{ count }] = await q<{ count: number }[]>`SELECT count(*)::int AS count FROM bookings ${platformWhere(q, filter)}`;
+    return count;
+  },
+
+  async summarizePlatformBookings(filter, today, nowMs) {
+    const q = await db();
+    // Each column is the SQL twin of a field of partnerStats() in lib/platform-stats.ts.
+    const recentSince = addDays(today, -30);
+    const staleBefore = new Date(nowMs - STALE_HOURS * 3600_000).toISOString();
+    const rows = await q<SummaryRow[]>`
+      SELECT
+        owner_id,
+        count(*)::int AS total,
+        (count(*) FILTER (WHERE date >= ${today} AND status <> 'cancelled'))::int AS upcoming,
+        (count(*) FILTER (WHERE left(created_at, 10) >= ${recentSince}))::int AS recent,
+        (count(*) FILTER (WHERE ${isWaiting(q)}))::int AS waiting,
+        (count(*) FILTER (WHERE ${isWaiting(q)} AND ${waitingSince(q)}::timestamptz < ${staleBefore}::timestamptz))::int AS stale,
+        (count(*) FILTER (WHERE status = 'cancelled'))::int AS cancelled,
+        coalesce(sum(CASE WHEN data->>'noShowAt' <> '' THEN coalesce((data->>'downpayment')::float8, 0) ELSE (data->>'total')::float8 END)
+          FILTER (WHERE status = 'confirmed' AND NOT coalesce((data->>'blocked')::boolean, false)), 0)::float8 AS confirmed_value,
+        max(created_at) AS last_booking_at
+      FROM bookings
+      ${platformWhere(q, filter)}
+      GROUP BY owner_id`;
+    return rows.map((r) => ({
+      ownerId: r.owner_id ?? "",
+      total: r.total,
+      upcoming: r.upcoming,
+      recent: r.recent,
+      waiting: r.waiting,
+      stale: r.stale,
+      cancelled: r.cancelled,
+      confirmedValue: r.confirmed_value,
+      lastBookingAt: r.last_booking_at,
+    }));
   },
 
   async findBooking(by, value) {
@@ -285,6 +371,13 @@ export const postgresStore: StoreBackend = {
 
   readDoc(ownerId, kind, fallback) {
     return readKey(docKey(ownerId, kind), fallback);
+  },
+
+  async readDocs<T>(kind: DocKind) {
+    const q = await db();
+    // Owner ids are hex, so the key pattern has no stray wildcards.
+    const rows = await q<{ key: string; value: T }[]>`SELECT key, value FROM documents WHERE key LIKE ${docKey("%", kind)}`;
+    return new Map(rows.map((r) => [r.key.split("/")[1], r.value]));
   },
 
   updateDoc(ownerId, kind, fallback, change) {

@@ -4,10 +4,12 @@ import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
 import { currentViewingAs, requirePlatformAdmin } from "@/lib/auth";
 import { formatHourRange, formatMoney, type Activity } from "@/lib/facility";
-import { byOwner, hoursWaiting, isStale, partnerStats, STALE_HOURS, waitingSince } from "@/lib/platform-stats";
-import { listOwners, listPlatformBookings, type Booking, type BookingStatus } from "@/lib/store";
+import { parsePage } from "@/lib/paging";
+import { hoursWaiting, isStale, STALE_HOURS } from "@/lib/platform-stats";
+import { listOwners, pagePlatformBookings, summarizePlatformBookings, type BookingStatus } from "@/lib/store";
 import { addDays, endOfMonth, facilityNow, formatDate } from "@/lib/time";
 import { StatusBadge } from "../../app/bookings-view";
+import { Pager } from "../../pager";
 import { Stat, ViewAsButton } from "../ui";
 
 export const metadata = { title: "Platform — all bookings" };
@@ -33,10 +35,7 @@ const STATUSES: { key: BookingStatus | "waiting"; label: string }[] = [
   { key: "cancelled", label: "Cancelled" },
 ];
 
-/** Rows shown at once; narrow the filters to see the rest. */
-const MAX_ROWS = 300;
-
-type Query = { period: Period; month: string; partner: string; status: BookingStatus | "waiting" | ""; q: string };
+type Query = { period: Period; month: string; partner: string; status: BookingStatus | "waiting" | ""; q: string; page: number };
 type SearchParams = Record<string, string | string[] | undefined>;
 
 function parse(sp: SearchParams, today: string): Query {
@@ -47,17 +46,20 @@ function parse(sp: SearchParams, today: string): Query {
     partner: /^[a-f0-9]{1,32}$/.test(str(sp.partner)) ? str(sp.partner) : "",
     status: STATUSES.find((s) => s.key === sp.status)?.key ?? "",
     q: str(sp.q).slice(0, 80),
+    page: parsePage(sp.page),
   };
 }
 
+/** The URL for the query with `changes` applied. Anything but a page change starts again at page 1. */
 function href(q: Query, today: string, changes: Partial<Query> = {}) {
-  const n = { ...q, ...changes };
+  const n = { ...q, page: 1, ...changes };
   const params = new URLSearchParams();
   if (n.period !== "upcoming") params.set("period", n.period);
   if (n.period === "month" && n.month !== today.slice(0, 7)) params.set("month", n.month);
   if (n.partner) params.set("partner", n.partner);
   if (n.status) params.set("status", n.status);
   if (n.q) params.set("q", n.q);
+  if (n.page > 1) params.set("page", String(n.page));
   return `/admin/all-bookings${params.size ? `?${params}` : ""}`;
 }
 
@@ -101,27 +103,37 @@ async function Bookings({ searchParams }: { searchParams: Promise<SearchParams> 
   const q = parse(sp, today);
   const { from, to } = range(q, today);
 
-  const [owners, inRange, viewing] = await Promise.all([
+  // The database filters, counts and pages the bookings; only the page on screen is loaded.
+  const filter = {
+    ownerId: q.partner || undefined,
+    from,
+    to,
+    status: q.status === "waiting" ? undefined : q.status || undefined,
+    waiting: q.status === "waiting",
+    search: q.q,
+    // Past periods read newest first; upcoming ones soonest first.
+    newestFirst: q.period !== "upcoming" && q.period !== "today",
+  };
+  const [owners, shown, summary, viewing] = await Promise.all([
     listOwners(),
-    listPlatformBookings({ ownerId: q.partner || undefined, from, to }),
+    pagePlatformBookings(filter, q.page),
+    summarizePlatformBookings(filter, today),
     currentViewingAs(),
   ]);
   const ownerById = new Map(owners.map((o) => [o.id, o]));
-  const text = q.q.toLowerCase();
-  const matchesText = (b: Booking) => !text || [b.id, b.name, b.email, b.phone].some((v) => v.toLowerCase().includes(text));
-  const matchesStatus = (b: Booking) => !q.status || (q.status === "waiting" ? !!waitingSince(b) : b.status === q.status);
-  const filtered = inRange.filter((b) => matchesText(b) && matchesStatus(b));
-  // Past periods read newest first; upcoming ones soonest first.
-  if (q.period !== "upcoming" && q.period !== "today") filtered.reverse();
-  const shown = filtered.slice(0, MAX_ROWS);
 
   const activities = new Map<string, Activity[]>();
-  await Promise.all([...new Set(shown.map((b) => b.ownerId))].map(async (id) => activities.set(id, await getAllActivities(id))));
+  await Promise.all([...new Set(shown.rows.map((b) => b.ownerId))].map(async (id) => activities.set(id, await getAllActivities(id))));
 
-  const totals = partnerStats(filtered, today);
-  const cancelled = filtered.filter((b) => b.status === "cancelled").length;
-  const perPartner = [...byOwner(filtered)]
-    .map(([id, list]) => ({ owner: ownerById.get(id), stats: partnerStats(list, today), cancelled: list.filter((b) => b.status === "cancelled").length }))
+  const totals = { waiting: 0, stale: 0, cancelled: 0, confirmedValue: 0 };
+  for (const s of summary) {
+    totals.waiting += s.waiting;
+    totals.stale += s.stale;
+    totals.cancelled += s.cancelled;
+    totals.confirmedValue += s.confirmedValue;
+  }
+  const perPartner = summary
+    .map((stats) => ({ owner: ownerById.get(stats.ownerId), stats }))
     .sort((a, b) => b.stats.stale - a.stats.stale || b.stats.total - a.stats.total);
 
   const partnerName = q.partner ? ownerById.get(q.partner)?.profile.name : undefined;
@@ -176,7 +188,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<SearchParams> 
       </section>
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label={partnerName ? `Bookings · ${partnerName}` : "Bookings"} value={String(filtered.length)} />
+        <Stat label={partnerName ? `Bookings · ${partnerName}` : "Bookings"} value={String(shown.total)} />
         <Stat label="Waiting on partner" value={String(totals.waiting)} />
         <Stat label={`Waiting over ${STALE_HOURS} h`} value={String(totals.stale)} tone={totals.stale ? "warn" : undefined} />
         <Stat label="Confirmed value" value={formatMoney(totals.confirmedValue)} />
@@ -198,7 +210,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<SearchParams> 
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5">
-                {perPartner.map(({ owner, stats, cancelled: c }) => (
+                {perPartner.map(({ owner, stats }) => (
                   <tr key={owner?.id ?? "unknown"}>
                     <td className="px-4 py-3">
                       {owner ? (
@@ -213,7 +225,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<SearchParams> 
                     <td className="px-4 py-3 text-right">{stats.total}</td>
                     <td className="px-4 py-3 text-right">{stats.waiting}</td>
                     <td className={`px-4 py-3 text-right ${stats.stale ? "font-semibold text-amber-800" : ""}`}>{stats.stale}</td>
-                    <td className="px-4 py-3 text-right">{c}</td>
+                    <td className="px-4 py-3 text-right">{stats.cancelled}</td>
                     <td className="px-4 py-3 text-right">{formatMoney(stats.confirmedValue)}</td>
                   </tr>
                 ))}
@@ -227,86 +239,89 @@ async function Bookings({ searchParams }: { searchParams: Promise<SearchParams> 
         <h2 className="text-lg font-semibold">
           Bookings{" "}
           <span className="font-normal text-black/50">
-            · {filtered.length > MAX_ROWS ? `first ${MAX_ROWS} of ${filtered.length}` : filtered.length}
-            {cancelled > 0 && ` · ${cancelled} cancelled`}
+            · {shown.total}
+            {totals.cancelled > 0 && ` · ${totals.cancelled} cancelled`}
           </span>
         </h2>
-        {shown.length === 0 ? (
+        {shown.total === 0 ? (
           <p className="mt-3 rounded-2xl bg-white p-8 text-center text-sm text-black/50">No bookings match these filters.</p>
         ) : (
-          <div className="mt-3 overflow-x-auto rounded-2xl border border-black/5 bg-white shadow-sm">
-            <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="border-b border-black/5 text-xs uppercase tracking-wide text-black/40">
-                <tr>
-                  <th className="px-4 py-3">Ref</th>
-                  <th className="px-4 py-3">When</th>
-                  <th className="px-4 py-3">Partner</th>
-                  <th className="px-4 py-3">Activity</th>
-                  <th className="px-4 py-3">Customer</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Total</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/5">
-                {shown.map((b) => {
-                  const owner = ownerById.get(b.ownerId);
-                  const activity = activities.get(b.ownerId)?.find((a) => a.slug === b.activitySlug);
-                  const court = activity?.resources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId;
-                  const stale = isStale(b);
-                  const open = `/app/bookings?booking=${b.id}`;
-                  return (
-                    <tr key={b.id} className={stale ? "bg-amber-50/50" : undefined}>
-                      <td className="px-4 py-3 font-mono text-xs">{b.id}</td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        {formatDate(b.date, { weekday: "short", month: "short", year: b.date.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric" })}
-                        <span className="block text-xs text-black/50">{formatHourRange(b.startHour, b.hours)}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {owner ? (
-                          <Link href={`/admin/partners/${owner.id}`} className="hover:text-emerald-700">
-                            {owner.profile.name}
-                          </Link>
-                        ) : (
-                          <span className="text-black/50">Deleted account</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {activity?.name ?? b.activitySlug}
-                        <span className="block text-xs text-black/50">{court}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {b.name}
-                        {b.staffCreated && <span className="block text-xs text-black/50">Added by staff</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={b.status} blocked={b.blocked} />
-                        {stale && (
-                          <span className="mt-1 block text-xs font-medium text-amber-800">
-                            waiting {hoursWaiting(b)} h
-                          </span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right">{formatMoney(b.total)}</td>
-                      <td className="px-4 py-3 text-right">
-                        {owner &&
-                          (owner.id === admin.id && !viewing ? (
-                            <Link href={open} className="text-xs font-semibold text-emerald-700 hover:underline">
-                              Open
+          <div className="mt-3 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <thead className="border-b border-black/5 text-xs uppercase tracking-wide text-black/40">
+                  <tr>
+                    <th className="px-4 py-3">Ref</th>
+                    <th className="px-4 py-3">When</th>
+                    <th className="px-4 py-3">Partner</th>
+                    <th className="px-4 py-3">Activity</th>
+                    <th className="px-4 py-3">Customer</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Total</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-black/5">
+                  {shown.rows.map((b) => {
+                    const owner = ownerById.get(b.ownerId);
+                    const activity = activities.get(b.ownerId)?.find((a) => a.slug === b.activitySlug);
+                    const court = activity?.resources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId;
+                    const stale = isStale(b);
+                    const open = `/app/bookings?booking=${b.id}`;
+                    return (
+                      <tr key={b.id} className={stale ? "bg-amber-50/50" : undefined}>
+                        <td className="px-4 py-3 font-mono text-xs">{b.id}</td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          {formatDate(b.date, { weekday: "short", month: "short", year: b.date.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric" })}
+                          <span className="block text-xs text-black/50">{formatHourRange(b.startHour, b.hours)}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {owner ? (
+                            <Link href={`/admin/partners/${owner.id}`} className="hover:text-emerald-700">
+                              {owner.profile.name}
                             </Link>
-                          ) : viewing?.partner.id === owner.id ? (
-                            <Link href={open} className="text-xs font-semibold text-emerald-700 hover:underline">
-                              Open
-                            </Link>
-                          ) : owner.id === admin.id ? null : (
-                            <ViewAsButton owner={owner} adminId={admin.id} next={open} label="Open" />
-                          ))}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          ) : (
+                            <span className="text-black/50">Deleted account</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {activity?.name ?? b.activitySlug}
+                          <span className="block text-xs text-black/50">{court}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {b.name}
+                          {b.staffCreated && <span className="block text-xs text-black/50">Added by staff</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={b.status} blocked={b.blocked} />
+                          {stale && (
+                            <span className="mt-1 block text-xs font-medium text-amber-800">
+                              waiting {hoursWaiting(b)} h
+                            </span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right">{formatMoney(b.total)}</td>
+                        <td className="px-4 py-3 text-right">
+                          {owner &&
+                            (owner.id === admin.id && !viewing ? (
+                              <Link href={open} className="text-xs font-semibold text-emerald-700 hover:underline">
+                                Open
+                              </Link>
+                            ) : viewing?.partner.id === owner.id ? (
+                              <Link href={open} className="text-xs font-semibold text-emerald-700 hover:underline">
+                                Open
+                              </Link>
+                            ) : owner.id === admin.id ? null : (
+                              <ViewAsButton owner={owner} adminId={admin.id} next={open} label="Open" />
+                            ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <Pager {...shown} href={(page) => href(q, today, { page })} />
           </div>
         )}
       </section>
