@@ -1,6 +1,16 @@
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { SlotTaken, type Booking, type DocKind, type PlatformDocKind, type LoginFailure, type Owner, type StoreBackend } from "./store-types";
+import { byOwner, partnerStats, waitingSince } from "./platform-stats";
+import {
+  SlotTaken,
+  type Booking,
+  type DocKind,
+  type PlatformBookingFilter,
+  type PlatformDocKind,
+  type LoginFailure,
+  type Owner,
+  type StoreBackend,
+} from "./store-types";
 
 // JSON files in ./data, for local development with zero setup. Single-process
 // only: writes are serialized in memory, which doesn't work across serverless
@@ -61,6 +71,21 @@ const clashes = (b: Booking, booking: Booking) =>
   b.resourceId === booking.resourceId &&
   b.date === booking.date &&
   overlaps(b, booking);
+
+/** Whether `b` is in a platform admin's filter (the file twin of platformWhere() in store-postgres.ts). */
+function inPlatformFilter(b: Booking, { ownerId, from, to, status, waiting, search }: PlatformBookingFilter) {
+  const text = search?.trim().toLowerCase();
+  return (
+    (!ownerId || b.ownerId === ownerId) &&
+    (!from || b.date >= from) &&
+    (!to || b.date <= to) &&
+    (!status || b.status === status) &&
+    (!waiting || !!waitingSince(b)) &&
+    (!text || [b.id, b.name, b.email, b.phone].some((v) => v.toLowerCase().includes(text)))
+  );
+}
+
+const byDate = (a: Booking, b: Booking) => a.date.localeCompare(b.date) || a.startHour - b.startHour;
 
 /** Gives the first account the bookings and documents from before accounts existed. */
 async function adoptLegacyData(ownerId: string) {
@@ -127,19 +152,28 @@ export const fileStore: StoreBackend = {
           (!date || b.date === date) &&
           (!status || b.status === status),
       )
-      .sort((a, b) => a.date.localeCompare(b.date) || a.startHour - b.startHour);
+      .sort(byDate);
   },
 
-  async listPlatformBookings({ ownerId, from, to, status }) {
-    return (await readAll())
-      .filter(
-        (b) =>
-          (!ownerId || b.ownerId === ownerId) &&
-          (!from || b.date >= from) &&
-          (!to || b.date <= to) &&
-          (!status || b.status === status),
-      )
-      .sort((a, b) => a.date.localeCompare(b.date) || a.startHour - b.startHour);
+  async listPlatformBookings(filter) {
+    // The id breaks ties, so pages don't shuffle bookings at the same hour between them.
+    const list = (await readAll()).filter((b) => inPlatformFilter(b, filter)).sort((a, b) => byDate(a, b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    if (filter.newestFirst) list.reverse();
+    const offset = filter.offset ?? 0;
+    return list.slice(offset, filter.limit === undefined ? undefined : offset + filter.limit);
+  },
+
+  async countPlatformBookings(filter) {
+    return (await readAll()).filter((b) => inPlatformFilter(b, filter)).length;
+  },
+
+  async summarizePlatformBookings(filter, today, nowMs) {
+    const list = (await readAll()).filter((b) => inPlatformFilter(b, filter));
+    return [...byOwner(list)].map(([ownerId, bookings]) => ({
+      ownerId,
+      ...partnerStats(bookings, today, nowMs),
+      cancelled: bookings.filter((b) => b.status === "cancelled").length,
+    }));
   },
 
   async findBooking(by, value) {
@@ -172,6 +206,19 @@ export const fileStore: StoreBackend = {
 
   readDoc(ownerId, kind, fallback) {
     return readJson(docFile(ownerId, kind), fallback);
+  },
+
+  async readDocs<T>(kind: DocKind) {
+    const ids = await readdir(path.join(DATA_DIR, "owners")).catch((err) => {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw err;
+    });
+    const docs = new Map<string, T>();
+    for (const id of ids) {
+      const doc = await readJson<T | undefined>(docFile(id, kind), undefined);
+      if (doc !== undefined) docs.set(id, doc);
+    }
+    return docs;
   },
 
   updateDoc(ownerId, kind, fallback, change) {

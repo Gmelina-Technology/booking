@@ -202,6 +202,11 @@ an admin gives them a flat promo.
   built-in [page banner](#page-banners) that shows on every dashboard page until they do.
 - **The public `/pricing` page** describes the partnership but never states the fee. Partners only
   see their exact rate when signing up and on Billing.
+- **Customers pay the fee on top.** A customer's request adds the booking's fee to its total
+  (`bookingFee` on the booking), and the booking widget, the customer's booking page and the emails
+  show the price, the booking fee and the total. The downpayment is a share of that total. If staff
+  move the booking, the fee follows the new date's rate. Bookings staff add themselves don't add the
+  fee: the partner covers it. Either way, the partner pays the fee on their Billing statement.
 
 ### Viewing as a partner
 
@@ -234,7 +239,9 @@ dashboard (`/app`) as theirs. An amber bar on every staff page names the partner
    `data/outbox/` instead of being sent, which is handy for previewing them in development.
 
 Every email sent is logged on the booking. A failed send shows in red in the staff view, and
-**Resend email** retries the payment request.
+**Resend email** retries the payment request. What staff see about a send stays generic ("Email
+sent", "Email couldn't be sent"): the recipient, the outbox file and the SMTP error only go to the
+server log.
 
 ## Platform admin
 
@@ -401,7 +408,7 @@ The app reads and writes data only through [`lib/store.ts`](lib/store.ts), which
 |---|---|---|
 | Accounts, bookings, activities, events, settings | JSON files in `data/` ([`lib/store-file.ts`](lib/store-file.ts)) | Postgres when `DATABASE_URL` is set ([`lib/store-postgres.ts`](lib/store-postgres.ts)) |
 | Photos and payment QR | `data/uploads/` | Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set ([`lib/uploads.ts`](lib/uploads.ts)) |
-| Emails without SMTP | Saved to `data/outbox/` for preview | Not sent; staff see the error |
+| Emails without SMTP | Saved to `data/outbox/` for preview | Not sent; staff see that it failed |
 | Login lockout counter | In memory | Postgres, shared by all instances |
 
 Locally, `data/owners.json` holds the accounts, `data/bookings.json` every booking (each with an

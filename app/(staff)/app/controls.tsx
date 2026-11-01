@@ -16,6 +16,7 @@ import {
 } from "./booking-actions";
 import { useDialog } from "../dialog";
 import { toast } from "@/app/toaster";
+import { formatMoney } from "@/lib/facility";
 import { sectionOf, staffHref, type StaffQuery, type Mode } from "./query";
 import type { Booking } from "@/lib/store-types";
 import { addDays, facilityNow, formatDate } from "@/lib/time";
@@ -141,13 +142,15 @@ export function DayPicker({ q, today }: { q: StaffQuery; today: string }) {
 }
 
 /** "Approve all N" on the New requests tab, for a busy morning's requests. */
-export function ApproveAll({ ids }: { ids: string[] }) {
+/** `fees`: the booking fees of all `ids` together, charged once each is played. */
+export function ApproveAll({ ids, fees }: { ids: string[]; fees: number }) {
   const [pending, start] = useTransition();
   const { confirm } = useDialog();
   if (ids.length < 2) return null;
 
   async function approve() {
-    const ok = await confirm("Each customer gets their payment QR (or confirmation, for activities with no downpayment) by email.", {
+    const feeNote = fees > 0 ? ` Booking fees: ${formatMoney(fees)} in total, charged once each booking is played.` : "";
+    const ok = await confirm(`Each customer gets their payment QR (or confirmation, for activities with no downpayment) by email.${feeNote}`, {
       title: `Approve all ${ids.length} requests?`,
       confirmLabel: `Approve ${ids.length}`,
     });
@@ -169,12 +172,28 @@ export function ApproveAll({ ids }: { ids: string[] }) {
 /** What the action buttons need to know about a booking. */
 export type ActionBooking = Pick<
   Booking,
-  "id" | "status" | "email" | "date" | "startHour" | "paymentRef" | "blocked" | "balancePaidAt" | "noShowAt" | "downpayment" | "total"
+  "id" | "status" | "email" | "date" | "startHour" | "paymentRef" | "blocked" | "balancePaidAt" | "noShowAt" | "downpayment" | "total" | "bookingFee"
 >;
 
 /** Next-step buttons for a booking, depending on where it is in the lifecycle. */
-export function BookingActions({ b, today, noDownpayment = false }: { b: ActionBooking; today: string; noDownpayment?: boolean }) {
+export function BookingActions({
+  b,
+  today,
+  noDownpayment = false,
+  fee = null,
+}: {
+  b: ActionBooking;
+  today: string;
+  noDownpayment?: boolean;
+  /** The platform's booking fee, named on the approve button. */
+  fee?: number | null;
+}) {
   const { id, status } = b;
+  const feeNote = !fee
+    ? ""
+    : b.bookingFee !== undefined
+      ? `. The customer pays the ${formatMoney(fee)} booking fee in their total`
+      : `. Booking fee ${formatMoney(fee)}, charged once played`;
   const [pending, start] = useTransition();
   const { confirm, prompt } = useDialog();
   const emailed = !!b.email;
@@ -233,19 +252,20 @@ export function BookingActions({ b, today, noDownpayment = false }: { b: ActionB
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+      {/* Buttons wrap onto a second line rather than push a narrow table wider than the page. */}
+      <div className="flex flex-wrap items-center justify-end gap-1.5 whitespace-nowrap">
         {status === "pending" && (
           <>
             {noDownpayment ? (
-              <button className={primary} disabled={pending} onClick={() => run(() => approveBooking(id))} title="Confirm (and email the customer). No downpayment: they pay at the venue">
+              <button className={primary} disabled={pending} onClick={() => run(() => approveBooking(id))} title={`Confirm (and email the customer). No downpayment: they pay at the venue${feeNote}`}>
                 Approve &amp; confirm
               </button>
             ) : emailed ? (
-              <button className={primary} disabled={pending} onClick={() => run(() => approveBooking(id))} title="Approve and email the customer the payment QR">
+              <button className={primary} disabled={pending} onClick={() => run(() => approveBooking(id))} title={`Approve and email the customer the payment QR${feeNote}`}>
                 Approve &amp; send QR
               </button>
             ) : (
-              <button className={primary} disabled={pending} onClick={() => run(() => approveBooking(id))} title="No email on file: approve, then collect the downpayment yourself">
+              <button className={primary} disabled={pending} onClick={() => run(() => approveBooking(id))} title={`No email on file: approve, then collect the downpayment yourself${feeNote}`}>
                 Approve
               </button>
             )}

@@ -8,6 +8,7 @@ import {
 } from "./facility";
 import { emptySchedule, type FeeSchedule } from "./fees";
 import { defaultHeroDoc, type HeroDoc } from "./hero";
+import { PAGE_SIZE, pageWindow, type PageInfo } from "./paging";
 import { fileStore } from "./store-file";
 import { databaseUrl, postgresStore } from "./store-postgres";
 import type {
@@ -19,6 +20,7 @@ import type {
   PageBanner,
   PartnerLogEntry,
   PlatformBookingFilter,
+  PlatformBookingSummary,
   PlatformNotification,
   StoreBackend,
   ViewAsLogEntry,
@@ -29,8 +31,8 @@ import type {
 //   - JSON files in ./data otherwise (local development, zero setup)
 //
 // Everything except accounts and booking-link lookups is scoped to one owner,
-// so one business can never read or change another's data. The exception,
-// listPlatformBookings(), is only for platform admin pages.
+// so one business can never read or change another's data. The exceptions,
+// the *PlatformBookings() functions and readAll*(), are only for platform admin pages.
 
 export type { Booking, BookingStatus, EmailKind, EmailLogEntry, Owner, PageBanner, PagePause, PartnerLogEntry, PlatformNotification, ViewAsLogEntry } from "./store-types";
 export { SlotTaken } from "./store-types";
@@ -96,6 +98,22 @@ export function listPlatformBookings(filter: PlatformBookingFilter = {}) {
   return backend().listPlatformBookings(filter);
 }
 
+/**
+ * One page of every partner's bookings, fetched from the backend a page at a
+ * time, with where it sits in the whole list (see pageWindow()). Platform admin pages only.
+ */
+export async function pagePlatformBookings(filter: PlatformBookingFilter, page: number, size = PAGE_SIZE): Promise<PageInfo & { rows: Booking[] }> {
+  const total = await backend().countPlatformBookings(filter);
+  const { offset, ...info } = pageWindow(total, page, size);
+  const rows = total ? await backend().listPlatformBookings({ ...filter, limit: size, offset }) : [];
+  return { ...info, rows };
+}
+
+/** Each partner's booking numbers over the filter, worked out by the backend. Platform admin pages only. */
+export function summarizePlatformBookings(filter: PlatformBookingFilter, today: string, nowMs = Date.now()): Promise<PlatformBookingSummary[]> {
+  return backend().summarizePlatformBookings(filter, today, nowMs);
+}
+
 /** Looks a booking up by its confirmation-link token, never by its short reference. */
 export async function getBookingByToken(token: string) {
   if (!/^[A-Za-z0-9_-]{32}$/.test(token)) return undefined;
@@ -149,6 +167,12 @@ export async function updateBooking(ownerId: string, id: string, change: (b: Boo
 
 export function readActivities(ownerId: string): Promise<Activity[]> {
   return backend().readDoc(ownerId, "activities", structuredClone(defaultActivities));
+}
+
+/** The activities of each of `ownerIds`, in one read. Platform admin pages only. */
+export async function readAllActivities(ownerIds: string[]): Promise<Map<string, Activity[]>> {
+  const docs = await backend().readDocs<Activity[]>("activities");
+  return new Map(ownerIds.map((id) => [id, docs.get(id) ?? structuredClone(defaultActivities)]));
 }
 
 /** Inserts or replaces the activity with the same slug. */
@@ -205,6 +229,12 @@ export function deleteEvent(ownerId: string, id: string): Promise<PastEvent | un
 
 export async function readSettings(ownerId: string): Promise<PaymentSettings> {
   return { ...defaultPaymentSettings, ...(await backend().readDoc<Partial<PaymentSettings>>(ownerId, "settings", {})) };
+}
+
+/** The payment settings of each of `ownerIds`, in one read. Platform admin pages only. */
+export async function readAllSettings(ownerIds: string[]): Promise<Map<string, PaymentSettings>> {
+  const docs = await backend().readDocs<Partial<PaymentSettings>>("settings");
+  return new Map(ownerIds.map((id) => [id, { ...defaultPaymentSettings, ...docs.get(id) }]));
 }
 
 export function writeSettings(ownerId: string, settings: PaymentSettings): Promise<void> {

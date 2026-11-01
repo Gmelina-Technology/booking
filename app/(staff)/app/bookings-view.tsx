@@ -5,9 +5,12 @@ import { getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
 import { formatHourRange, formatMoney, platform, type Activity } from "@/lib/facility";
 import { releaseOverdueHolds } from "@/lib/holds";
+import { bookingFee } from "@/lib/fees";
 import { isSale, revenueOf } from "@/lib/sales";
-import { holdsSlot, listBookings, readSettings, type Booking } from "@/lib/store";
+import { pageOf } from "@/lib/paging";
+import { holdsSlot, listBookings, readFeeSchedule, readSettings, type Booking } from "@/lib/store";
 import { addDays, addMonths, endOfMonth, facilityNow, formatDate, isoWeek, startOfMonth, startOfWeek } from "@/lib/time";
+import { Pager } from "../pager";
 import { DayStrip, DayTimeline, Legend, MonthGrid, WeekGrid, hourRange, type Column } from "./calendar";
 import { ApproveAll, BookingActions, CopyReference, DayPicker, EraseCustomerButton, ModeSelect, Toolbar } from "./controls";
 import { CreateBooking, EditBooking, type BookableActivity } from "./create-booking";
@@ -85,7 +88,12 @@ async function BookingsView({ searchParams, section }: { searchParams: SearchPar
   const today = now.date;
   // Free up unpaid holds past the payment window before showing the schedule.
   await releaseOverdueHolds(owner.id);
-  const [activities, all, settings] = await Promise.all([getAllActivities(owner.id), listBookings({ ownerId: owner.id }), readSettings(owner.id)]);
+  const [activities, all, settings, fees] = await Promise.all([
+    getAllActivities(owner.id),
+    listBookings({ ownerId: owner.id }),
+    readSettings(owner.id),
+    readFeeSchedule(),
+  ]);
   const activityBySlug = new Map(activities.map((a) => [a.slug, a]));
   const q = parseQuery(sp, today, (slug) => activityBySlug.has(slug), section);
   const inActivity = all.filter((b) => (!q.activity || b.activitySlug === q.activity) && (q.mode !== "table" || matchesSearch(b, q.search)));
@@ -101,6 +109,7 @@ async function BookingsView({ searchParams, section }: { searchParams: SearchPar
       showDate,
       today,
       overdueHours: overdue.has(b.id) ? settings.paymentWindowHours : null,
+      fee: bookingFee(fees, owner.id, b),
     };
   }
 
@@ -298,6 +307,7 @@ function TableView({
     : bookings.filter((b) => b.date === q.date).sort((a, b) => a.startHour - b.startHour);
   const active = rows.filter((b) => holdsSlot(b) && !b.blocked);
   const confirmed = rows.filter(isSale);
+  const paged = pageOf(rows, q.page);
 
   return (
     <>
@@ -349,7 +359,7 @@ function TableView({
       {viewHints[view.key] && <p className="mt-3 text-sm text-black/50">{viewHints[view.key]}</p>}
       {view.key === "requests" && (
         <div className="mt-3">
-          <ApproveAll ids={rows.map((b) => b.id)} />
+          <ApproveAll ids={rows.map((b) => b.id)} fees={rows.reduce((n, b) => n + (rowProps(b, false).fee ?? 0), 0)} />
         </div>
       )}
 
@@ -374,16 +384,16 @@ function TableView({
           </p>
         ) : (
           <>
-            {/* Phones and tablets: one stacked card per booking. */}
-            <ul className="divide-y divide-black/5 lg:hidden">
-              {rows.map((b) => (
+            {/* Phones, tablets and small laptops: one stacked card per booking. Next to the menu, the table only fits from xl. */}
+            <ul className="divide-y divide-black/5 xl:hidden">
+              {paged.rows.map((b) => (
                 <li key={b.id}>
                   <BookingCard {...rowProps(b, !isSchedule)} />
                 </li>
               ))}
             </ul>
             {/* Desktop: one compact row per booking. No overflow container, so the actions menu isn't clipped. */}
-            <table className="hidden w-full text-left text-sm lg:table">
+            <table className="hidden w-full text-left text-sm xl:table">
               <thead className="border-b border-black/5 text-xs uppercase tracking-wide text-black/50">
                 <tr>
                   <th className="py-3 pl-3 pr-2 font-medium">Reference</th>
@@ -398,11 +408,12 @@ function TableView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/5">
-                {rows.map((b) => (
+                {paged.rows.map((b) => (
                   <BookingRow key={b.id} {...rowProps(b, !isSchedule)} />
                 ))}
               </tbody>
             </table>
+            <Pager {...paged} href={(page) => staffHref(q, today, { page })} />
           </>
         )}
       </div>
@@ -521,9 +532,11 @@ export type RowProps = {
   today: string;
   /** The payment window in hours, when this booking is past it. */
   overdueHours: number | null;
+  /** The platform's booking fee, charged once played. Null for blocks and cancelled bookings. */
+  fee: number | null;
 };
 
-function BookingRow({ b, activity, showDate, today, overdueHours }: RowProps) {
+function BookingRow({ b, activity, showDate, today, overdueHours, fee }: RowProps) {
   return (
     <tr className={`align-top ${b.status === "cancelled" ? "text-black/40" : ""}`}>
       <td className="py-2.5 pl-3 pr-2">
@@ -533,7 +546,7 @@ function BookingRow({ b, activity, showDate, today, overdueHours }: RowProps) {
         {showDate && <p>{formatDate(b.date)}</p>}
         <p className={showDate ? "text-xs font-normal text-black/60" : ""}>{formatHourRange(b.startHour, b.hours)}</p>
       </td>
-      <td className="whitespace-nowrap px-3 py-3">
+      <td className="px-3 py-3">
         <Court b={b} activity={activity} />
       </td>
       {/* w-full + max-w-0: take the leftover width and truncate long text instead of widening the table. */}
@@ -547,13 +560,13 @@ function BookingRow({ b, activity, showDate, today, overdueHours }: RowProps) {
         <Payment b={b} overdueHours={overdueHours} />
       </td>
       <td className="py-2.5 pl-3 pr-4">
-        <BookingActions b={b} today={today} noDownpayment={!!activity?.noDownpayment} />
+        <BookingActions b={b} today={today} noDownpayment={!!activity?.noDownpayment} fee={fee} />
       </td>
     </tr>
   );
 }
 
-function BookingCard({ b, activity, showDate, today, overdueHours }: RowProps) {
+function BookingCard({ b, activity, showDate, today, overdueHours, fee }: RowProps) {
   return (
     <div className={`space-y-3 p-4 text-sm ${b.status === "cancelled" ? "text-black/40" : ""}`}>
       <div className="flex items-start justify-between gap-3">
@@ -572,7 +585,7 @@ function BookingCard({ b, activity, showDate, today, overdueHours }: RowProps) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <Payment b={b} overdueHours={overdueHours} />
         <div className="ml-auto">
-          <BookingActions b={b} today={today} noDownpayment={!!activity?.noDownpayment} />
+          <BookingActions b={b} today={today} noDownpayment={!!activity?.noDownpayment} fee={fee} />
         </div>
       </div>
     </div>
@@ -583,7 +596,7 @@ export function Court({ b, activity }: { b: Booking; activity?: Activity }) {
   const resource = activity?.resources.find((r) => r.id === b.resourceId);
   return (
     <>
-      {activity?.name ?? b.activitySlug} <span className="text-black/50">· {resource?.name ?? b.resourceId}</span>
+      {activity?.name ?? b.activitySlug} <span className="whitespace-nowrap text-black/50">· {resource?.name ?? b.resourceId}</span>
     </>
   );
 }
@@ -647,19 +660,26 @@ function Payment({ b, overdueHours }: { b: Booking; overdueHours: number | null 
   const tag = "whitespace-nowrap rounded px-1.5 py-0.5 ring-1";
   return (
     <div className="space-y-1 text-xs">
-      <p className="whitespace-nowrap">
-        Total <span className="font-semibold">{formatMoney(b.total)}</span>
+      {/* Each part stays whole, but the parts can wrap when the table is narrow. */}
+      <p>
+        <span className="whitespace-nowrap">
+          Total <span className="font-semibold">{formatMoney(b.total)}</span>
+        </span>
         {b.downpayment === 0 && !b.balancePaidAt && (
           <>
             {" "}
-            <span className="text-black/30">·</span> Pay at venue
+            <span className="whitespace-nowrap">
+              <span className="text-black/30">·</span> Pay at venue
+            </span>
           </>
         )}
         {!!b.downpayment && !b.balancePaidAt && (
           <>
             {" "}
-            <span className="text-black/30">·</span> Down <span className="font-semibold">{formatMoney(b.downpayment)}</span>
-            {b.paidAt && <span className="text-emerald-700"> ✓</span>}
+            <span className="whitespace-nowrap">
+              <span className="text-black/30">·</span> Down <span className="font-semibold">{formatMoney(b.downpayment)}</span>
+              {b.paidAt && <span className="text-emerald-700"> ✓</span>}
+            </span>
           </>
         )}
       </p>
@@ -680,7 +700,7 @@ function Payment({ b, overdueHours }: { b: Booking; overdueHours: number | null 
           {lastEmail && (
             <span
               className={`whitespace-nowrap ${lastEmail.ok ? "text-black/40" : "font-semibold text-red-700"}`}
-              title={lastEmail.detail ? `${emailLabel}: ${lastEmail.detail}` : emailLabel}
+              title={emailLabel}
             >
               {lastEmail.ok ? "✓" : "✕"} {emailLabel}
               {lastEmail.ok ? "" : " failed"}

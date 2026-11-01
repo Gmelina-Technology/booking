@@ -1,6 +1,8 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 import { getActiveActivities } from "@/lib/activities";
+import { photoUrl } from "@/lib/events";
 import { formatHour, formatMoney } from "@/lib/facility";
 import { ownerFromParams, ownerPath } from "@/lib/owners";
 import Hero from "./hero";
@@ -43,9 +45,20 @@ async function OwnerHomeContent({ params }: { params: Promise<{ handle: string }
               className="group flex overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg sm:block"
             >
               <div
-                className={`flex w-20 shrink-0 items-center justify-center bg-gradient-to-br ${a.gradient} text-4xl sm:h-36 sm:w-auto sm:text-6xl`}
+                className={`relative flex w-20 shrink-0 items-center justify-center overflow-hidden bg-gradient-to-br ${a.gradient} text-4xl sm:h-36 sm:w-auto sm:text-6xl`}
               >
-                <span className="transition group-hover:scale-110">{a.emoji}</span>
+                {a.background ? (
+                  <Image
+                    src={photoUrl(a.background)}
+                    alt=""
+                    fill
+                    unoptimized
+                    sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 80px"
+                    className="object-cover transition group-hover:scale-105"
+                  />
+                ) : (
+                  <span className="transition group-hover:scale-110">{a.emoji}</span>
+                )}
               </div>
               <div className="min-w-0 flex-1 p-4 sm:p-5">
                 <div className="flex items-baseline justify-between gap-2">

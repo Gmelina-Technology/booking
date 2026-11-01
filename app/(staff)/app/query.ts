@@ -7,6 +7,8 @@
 // (/app/bookings). staffHref() picks the page from the query, so a link that
 // changes the mode or tab lands on the right one.
 
+import { parsePage } from "@/lib/paging";
+
 export const MODES = ["month", "week", "day", "table"] as const;
 export type Mode = (typeof MODES)[number];
 
@@ -37,7 +39,12 @@ export type StaffQuery = {
   search: string;
   /** An empty calendar slot that was clicked, `slug~resourceId~hour`: opens the booking form there. */
   slot: string;
+  /** Table page, from 1. Back to 1 whenever the list itself changes (tab, filter, search). */
+  page: number;
 };
+
+/** Query fields that change which rows the table lists; changing any of them starts again at page 1. */
+const LIST_FIELDS = ["mode", "view", "date", "activity", "past", "search"] as const;
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -77,6 +84,7 @@ export function parseQuery(sp: SearchParams, today: string, isActivity: (slug: s
     booking: /^[A-Z0-9]{4,16}$/.test(str(sp.booking)) ? str(sp.booking) : "",
     search: str(sp.q).trim().slice(0, 80),
     slot: /^[a-z0-9-]{1,60}~[A-Za-z0-9-]{1,60}~\d{1,2}$/.test(str(sp.slot)) ? str(sp.slot) : "",
+    page: parsePage(sp.page),
   };
 }
 
@@ -100,10 +108,12 @@ export function matchesSearch(
 
 /**
  * `/app/<section>?…` for the query with `changes` applied. Any open booking
- * closes unless `changes` names one. Defaults are left out to keep URLs short.
+ * closes unless `changes` names one, and changing what's listed goes back to
+ * page 1. Defaults are left out to keep URLs short.
  */
 export function staffHref(q: StaffQuery, today: string, changes: Partial<StaffQuery> = {}) {
-  const n = { ...q, booking: "", slot: "", ...changes };
+  const page = LIST_FIELDS.some((k) => k in changes) ? 1 : q.page;
+  const n = { ...q, booking: "", slot: "", page, ...changes };
   const section = sectionOf(n);
   const defaultView = section === "inbox" ? "requests" : "all";
   const params = new URLSearchParams();
@@ -116,6 +126,7 @@ export function staffHref(q: StaffQuery, today: string, changes: Partial<StaffQu
   if (n.booking) params.set("booking", n.booking);
   if (n.search && section !== "calendar") params.set("q", n.search);
   if (n.slot) params.set("slot", n.slot);
+  if (n.page > 1 && section !== "calendar") params.set("page", String(n.page));
   const s = params.toString();
   return `/app/${section}${s ? `?${s}` : ""}`;
 }

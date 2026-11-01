@@ -1,7 +1,9 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
+import { photoUrl } from "@/lib/events";
 import { formatHour, formatMoney } from "@/lib/facility";
 import { listBookings } from "@/lib/store";
 import { ActivityRowActions } from "./row-actions";
@@ -46,11 +48,11 @@ async function ActivityList() {
       {activities.map((a, i) => (
         <li key={a.slug} className={`flex flex-wrap items-center gap-4 p-4 ${a.active ? "" : "bg-black/[0.02]"}`}>
           <span
-            className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br ${a.gradient} text-2xl ${
+            className={`relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br ${a.gradient} text-2xl ${
               a.active ? "" : "opacity-40 grayscale"
             }`}
           >
-            {a.emoji}
+            {a.background ? <Image src={photoUrl(a.background)} alt="" fill unoptimized sizes="48px" className="object-cover" /> : a.emoji}
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
