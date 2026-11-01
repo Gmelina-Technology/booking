@@ -63,7 +63,7 @@ export async function createBooking(input: {
   notes: string;
 }): Promise<BookingResult> {
   const owner = await getPublicOwnerById(input.ownerId);
-  if (!owner) return { ok: false, error: "This business isn't taking bookings." };
+  if (!owner || owner.suspended) return { ok: false, error: "This business isn't taking bookings." };
   const activity = await getActivity(owner.id, input.activitySlug);
   if (!activity || !activity.active) return { ok: false, error: "This activity isn't available for booking." };
   if (!activity.resources.some((r) => r.id === input.resourceId)) return { ok: false, error: "Unknown court." };
@@ -123,7 +123,7 @@ export async function createBooking(input: {
         staffNewBookingEmail(
           { booking, activity, business: owner.profile, link: `${base}/bookings/${booking.accessToken}` },
           staffNotifyEmail,
-          `${base}/admin/inbox`,
+          `${base}/app/inbox`,
         ),
       );
       if (!result.ok) console.error("Staff alert email failed:", result.detail);

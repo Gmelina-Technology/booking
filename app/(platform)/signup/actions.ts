@@ -3,14 +3,17 @@
 import { updateTag } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { clientIp, startSession } from "@/lib/auth";
+import { after } from "next/server";
+import { clientIp, platformAdminEmails, startSession } from "@/lib/auth";
 import { signupCodeEmail } from "@/lib/emails";
 import { defaultProfile } from "@/lib/facility";
 import { sendMail } from "@/lib/mailer";
 import { handleError, OWNERS_TAG } from "@/lib/owners";
 import { hashPassword } from "@/lib/password";
 import { MIN_PASSWORD_LENGTH } from "@/lib/password-rules";
+import { notifyPartnerJoined } from "@/lib/platform-notifications";
 import { authConfigured } from "@/lib/session";
+import { siteUrl } from "@/lib/site-url";
 import {
   CODE_MINUTES,
   codeMatches,
@@ -159,9 +162,13 @@ async function verifyCode(prev: SignupState, raw: string): Promise<SignupState> 
   const settings = await readSettings(owner!.id);
   if (!settings.staffNotifyEmail) await writeSettings(owner!.id, { ...settings, staffNotifyEmail: pending.email });
 
+  // Tell platform admins without making the new partner wait for the emails.
+  const base = await siteUrl();
+  after(() => notifyPartnerJoined(owner!, platformAdminEmails(), base));
+
   updateTag(OWNERS_TAG);
   await startSession(owner!);
-  redirect("/admin/business?welcome=1");
+  redirect("/app/business?welcome=1");
 }
 
 async function resendCode(prev: SignupState): Promise<SignupState> {

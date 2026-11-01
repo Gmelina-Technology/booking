@@ -9,7 +9,7 @@ import type { Booking, DocKind, PlatformDocKind, LoginFailure, Owner, StoreBacke
 //   data/owners.json                 every account
 //   data/bookings.json               every booking (each has an ownerId)
 //   data/owners/<id>/<kind>.json     an owner's activities, events and settings
-//   data/platform/<kind>.json        platform-wide documents (partner fee rates)
+//   data/platform/<kind>.json        platform-wide documents (fee rates, admin logs, notifications)
 //   data/<kind>.json                 data from before accounts existed, moved
 //                                    into the first account when it signs up
 
@@ -114,6 +114,18 @@ export const fileStore: StoreBackend = {
           b.ownerId === ownerId &&
           (!activitySlug || b.activitySlug === activitySlug) &&
           (!date || b.date === date) &&
+          (!status || b.status === status),
+      )
+      .sort((a, b) => a.date.localeCompare(b.date) || a.startHour - b.startHour);
+  },
+
+  async listPlatformBookings({ ownerId, from, to, status }) {
+    return (await readAll())
+      .filter(
+        (b) =>
+          (!ownerId || b.ownerId === ownerId) &&
+          (!from || b.date >= from) &&
+          (!to || b.date <= to) &&
           (!status || b.status === status),
       )
       .sort((a, b) => a.date.localeCompare(b.date) || a.startHour - b.startHour);

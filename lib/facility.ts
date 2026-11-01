@@ -1,6 +1,6 @@
 // Platform and facility configuration. `platform` is shared by every business
-// on the site; each business edits its own profile at /admin/business and its
-// activities at /admin/activities (`defaultActivities` only seeds them).
+// on the site; each business edits its own profile at /app/business and its
+// activities at /app/activities (`defaultActivities` only seeds them).
 
 export type Resource = { id: string; name: string };
 
@@ -46,7 +46,7 @@ export const platform = {
   sampleHandle: "",
 };
 
-/** What a business shows on its page, in emails and in the footer. Edited at /admin/business. */
+/** What a business shows on its page, in emails and in the footer. Edited at /app/business. */
 export type BusinessProfile = {
   name: string;
   tagline: string;
@@ -172,7 +172,7 @@ export const defaultActivities: Activity[] = [
   },
 ];
 
-/** A past event shown on the home page as social proof. Managed at /admin/events. */
+/** A past event shown on the home page as social proof. Managed at /app/events. */
 export type PastEvent = {
   id: string;
   title: string;
@@ -194,7 +194,7 @@ export type PastEvent = {
 export type BannerMoment = { src: string; caption: string; detail: string };
 
 // Stock photos (Unsplash) that fill the home banner until staff upload event
-// photos at /admin/events. Published event photos always come first; replace
+// photos at /app/events. Published event photos always come first; replace
 // these with the client's own shots before launch.
 const unsplash = (id: string) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=900&q=75`;
 export const defaultBannerMoments: BannerMoment[] = [
@@ -204,7 +204,7 @@ export const defaultBannerMoments: BannerMoment[] = [
   { src: unsplash("1659303388076-de1535159d6c"), caption: "Lunch-break rallies", detail: "Table Tennis" },
 ];
 
-/** How customers pay the downpayment. Edited by staff at /admin/settings. */
+/** How customers pay the downpayment. Edited by staff at /app/settings. */
 export type PaymentSettings = {
   /** Percent of the total due up front, 0–100. */
   downpaymentPercent: number;

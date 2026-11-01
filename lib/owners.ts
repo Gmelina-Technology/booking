@@ -5,15 +5,22 @@ import { getOwnerById, listOwners } from "./store";
 
 export const OWNERS_TAG = "owners";
 
-/** What anyone may see about a business. Never includes the sign-in email or password hash. */
-export type PublicOwner = { id: string; handle: string; profile: BusinessProfile };
+/**
+ * What anyone may see about a business. Never includes the sign-in email or
+ * password hash. `suspended` is only ever set by getPublicOwnerById().
+ */
+export type PublicOwner = { id: string; handle: string; profile: BusinessProfile; suspended?: boolean };
 
-/** Every business, oldest first. Cached until someone signs up or edits their profile. */
+/**
+ * Every listed business, oldest first: suspended partners are left out, so
+ * their page 404s and they leave the directory. Cached until someone signs up,
+ * edits their profile or a platform admin suspends or reinstates them.
+ */
 export async function getPublicOwners(): Promise<PublicOwner[]> {
   "use cache";
   cacheLife("max");
   cacheTag(OWNERS_TAG);
-  return (await listOwners()).map(({ id, handle, profile }) => ({ id, handle, profile }));
+  return (await listOwners()).filter((o) => !o.suspension).map(({ id, handle, profile }) => ({ id, handle, profile }));
 }
 
 export async function getPublicOwner(handle: string): Promise<PublicOwner | undefined> {
@@ -21,12 +28,17 @@ export async function getPublicOwner(handle: string): Promise<PublicOwner | unde
   return (await getPublicOwners()).find((o) => o.handle === h);
 }
 
+/**
+ * Any business by id, including suspended ones (marked `suspended`), so their
+ * customers' booking links and emails keep working. Check `suspended` before
+ * taking a new booking.
+ */
 export async function getPublicOwnerById(id: string): Promise<PublicOwner | undefined> {
   const cached = (await getPublicOwners()).find((o) => o.id === id);
   if (cached) return cached;
-  // Not in the cache yet (e.g. a moment after sign-up): read it directly.
+  // Suspended, or not in the cache yet (e.g. a moment after sign-up): read it directly.
   const owner = await getOwnerById(id);
-  return owner && { id: owner.id, handle: owner.handle, profile: owner.profile };
+  return owner && { id: owner.id, handle: owner.handle, profile: owner.profile, suspended: !!owner.suspension };
 }
 
 /** Handles are 3–30 lowercase letters, digits and single hyphens, not starting or ending with one. */

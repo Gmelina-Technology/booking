@@ -50,7 +50,7 @@ export function CalendarMock() {
         <span className="h-2.5 w-2.5 rounded-full bg-black/15" />
         <span className="h-2.5 w-2.5 rounded-full bg-black/15" />
         <span className="h-2.5 w-2.5 rounded-full bg-black/15" />
-        <span className="ml-3 truncate rounded-md bg-white px-3 py-0.5 text-xs text-black/40">courtside / admin · Bookings</span>
+        <span className="ml-3 truncate rounded-md bg-white px-3 py-0.5 text-xs text-black/40">courtside / app · Bookings</span>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
         <div>
