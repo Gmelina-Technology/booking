@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { formatHour, gradients, type Activity, type Resource } from "@/lib/facility";
 import { WEEKDAY_NAMES } from "@/lib/schedule";
+import { toast } from "@/app/toaster";
 import { saveActivity, type ActivityInput } from "./actions";
 
 const blank: ActivityInput = {
@@ -31,7 +32,6 @@ export default function ActivityForm({ activity }: { activity?: Activity }) {
   const router = useRouter();
   const [form, setForm] = useState<ActivityInput>(activity ?? blank);
   const [includesText, setIncludesText] = useState(form.includes.join("\n"));
-  const [error, setError] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
 
   const set = <K extends keyof ActivityInput>(key: K, value: ActivityInput[K]) => setForm((f) => ({ ...f, [key]: value }));
@@ -46,14 +46,13 @@ export default function ActivityForm({ activity }: { activity?: Activity }) {
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
     startSaving(async () => {
       const result = await saveActivity(activity?.slug ?? null, {
         ...form,
         includes: includesText.split("\n"),
       });
       if (result.ok) router.push("/app/activities");
-      else setError(result.error);
+      else toast.error(result.error);
     });
   }
 
@@ -272,7 +271,6 @@ export default function ActivityForm({ activity }: { activity?: Activity }) {
           </span>
         </label>
 
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
         <button
           type="submit"

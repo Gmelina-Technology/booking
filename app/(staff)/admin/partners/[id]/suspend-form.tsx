@@ -1,12 +1,20 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { toast } from "@/app/toaster";
 import { suspendPartner, type SuspendState } from "../actions";
 
 /** Asks for the reason (the partner sees it) before taking their page offline. */
 export default function SuspendForm({ ownerId, name }: { ownerId: string; name: string }) {
   const [open, setOpen] = useState(false);
-  const [state, action, pending] = useActionState<SuspendState, FormData>(suspendPartner.bind(null, ownerId), { error: null });
+  const [, action, pending] = useActionState<SuspendState, FormData>(
+    async (prev, form) => {
+      const next = await suspendPartner(ownerId, prev, form);
+      toast.error(next.error);
+      return next;
+    },
+    { error: null },
+  );
 
   if (!open)
     return (
@@ -37,11 +45,6 @@ export default function SuspendForm({ ownerId, name }: { ownerId: string; name: 
           className="mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
         />
       </label>
-      {state.error && (
-        <p role="alert" className="text-sm font-medium text-red-700">
-          {state.error}
-        </p>
-      )}
       <div className="flex gap-2">
         <button type="submit" disabled={pending} className="rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60">
           {pending ? "Suspending…" : "Suspend page"}

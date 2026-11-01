@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import type { PastEvent } from "@/lib/facility";
 import { resizeImage } from "@/lib/resize-image";
+import { toast } from "@/app/toaster";
 import { saveEvent } from "./actions";
 
 export default function EventForm({
@@ -21,7 +22,6 @@ export default function EventForm({
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(event?.photo ? `/uploads/${event.photo}` : null);
   const [removePhoto, setRemovePhoto] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
   const [processing, setProcessing] = useState(false);
 
@@ -33,7 +33,6 @@ export default function EventForm({
 
   async function pickPhoto(file: File | undefined) {
     if (!file) return;
-    setError(null);
     setProcessing(true);
     try {
       const resized = await resizeImage(file);
@@ -41,7 +40,7 @@ export default function EventForm({
       setPreview(URL.createObjectURL(resized));
       setRemovePhoto(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't read that photo.");
+      toast.error(e instanceof Error ? e.message : "Couldn't read that photo.");
     } finally {
       setProcessing(false);
     }
@@ -58,11 +57,10 @@ export default function EventForm({
     form.delete("photoPicker");
     if (photo) form.set("photo", photo);
     if (removePhoto) form.set("removePhoto", "1");
-    setError(null);
     startSaving(async () => {
       const result = await saveEvent(event?.id ?? null, form);
       if (result.ok) router.push("/app/events");
-      else setError(result.error);
+      else toast.error(result.error);
     });
   }
 
@@ -147,7 +145,6 @@ export default function EventForm({
           </span>
         </label>
 
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
         <button
           type="submit"

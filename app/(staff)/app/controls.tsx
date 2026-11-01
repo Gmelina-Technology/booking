@@ -15,6 +15,7 @@ import {
   type StaffResult,
 } from "./booking-actions";
 import { useDialog } from "../dialog";
+import { toast } from "@/app/toaster";
 import { sectionOf, staffHref, type StaffQuery, type Mode } from "./query";
 import type { Booking } from "@/lib/store-types";
 import { addDays, facilityNow, formatDate } from "@/lib/time";
@@ -142,9 +143,8 @@ export function DayPicker({ q, today }: { q: StaffQuery; today: string }) {
 /** "Approve all N" on the New requests tab, for a busy morning's requests. */
 export function ApproveAll({ ids }: { ids: string[] }) {
   const [pending, start] = useTransition();
-  const [result, setResult] = useState<StaffResult | null>(null);
   const { confirm } = useDialog();
-  if (ids.length < 2 && !result) return null;
+  if (ids.length < 2) return null;
 
   async function approve() {
     const ok = await confirm("Each customer gets their payment QR (or confirmation, for activities with no downpayment) by email.", {
@@ -152,23 +152,17 @@ export function ApproveAll({ ids }: { ids: string[] }) {
       confirmLabel: `Approve ${ids.length}`,
     });
     if (!ok) return;
-    setResult(null);
-    start(async () => setResult(await approveBookings(ids)));
+    start(async () => toast.result(await approveBookings(ids)));
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      {ids.length >= 2 && (
-        <button
-          onClick={approve}
-          disabled={pending}
-          className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
-        >
-          {pending ? "Approving…" : `Approve all ${ids.length}`}
-        </button>
-      )}
-      {result && <p className={`text-sm ${result.ok ? "text-emerald-700" : "text-red-700"}`}>{result.message}</p>}
-    </div>
+    <button
+      onClick={approve}
+      disabled={pending}
+      className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+    >
+      {pending ? "Approving…" : `Approve all ${ids.length}`}
+    </button>
   );
 }
 
@@ -182,13 +176,11 @@ export type ActionBooking = Pick<
 export function BookingActions({ b, today, noDownpayment = false }: { b: ActionBooking; today: string; noDownpayment?: boolean }) {
   const { id, status } = b;
   const [pending, start] = useTransition();
-  const [result, setResult] = useState<StaffResult | null>(null);
   const { confirm, prompt } = useDialog();
   const emailed = !!b.email;
 
   function run(action: () => Promise<StaffResult>) {
-    setResult(null);
-    start(async () => setResult(await action()));
+    start(async () => toast.result(await action()));
   }
 
   async function cancel(verb: string) {
@@ -297,7 +289,6 @@ export function BookingActions({ b, today, noDownpayment = false }: { b: ActionB
         )}
       </div>
       {pending && <p className="text-xs text-black/50">Working…</p>}
-      {result && <p className={`max-w-xs text-right text-xs ${result.ok ? "text-emerald-700" : "text-red-700"}`}>{result.message}</p>}
     </div>
   );
 }
@@ -305,7 +296,6 @@ export function BookingActions({ b, today, noDownpayment = false }: { b: ActionB
 /** Erases a finished booking's customer details, e.g. when the customer asks (Data Privacy Act). */
 export function EraseCustomerButton({ id }: { id: string }) {
   const [pending, start] = useTransition();
-  const [result, setResult] = useState<StaffResult | null>(null);
   const { confirm } = useDialog();
 
   async function erase() {
@@ -315,22 +305,18 @@ export function EraseCustomerButton({ id }: { id: string }) {
       danger: true,
     });
     if (!ok) return;
-    setResult(null);
-    start(async () => setResult(await eraseCustomerDetails(id)));
+    start(async () => toast.result(await eraseCustomerDetails(id)));
   }
 
   return (
-    <div className="space-y-1">
-      <button
-        type="button"
-        disabled={pending}
-        onClick={erase}
-        className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-      >
-        {pending ? "Erasing…" : "Erase customer details"}
-      </button>
-      {result && <p className={`text-xs ${result.ok ? "text-emerald-700" : "text-red-700"}`}>{result.message}</p>}
-    </div>
+    <button
+      type="button"
+      disabled={pending}
+      onClick={erase}
+      className="rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+    >
+      {pending ? "Erasing…" : "Erase customer details"}
+    </button>
   );
 }
 

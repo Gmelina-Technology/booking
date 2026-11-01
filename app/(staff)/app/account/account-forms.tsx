@@ -2,6 +2,7 @@
 
 import { startTransition, useActionState } from "react";
 import { MIN_PASSWORD_LENGTH } from "@/lib/password-rules";
+import { toast } from "@/app/toaster";
 import { useDialog } from "../../dialog";
 import { changePassword, deleteAccount, requestEmailChange, type AccountState } from "./actions";
 
@@ -9,13 +10,13 @@ const input =
   "mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20";
 const primary = "rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60";
 
-function Result({ state }: { state: AccountState }) {
-  if (!state) return null;
-  return (
-    <p role={state.ok ? "status" : "alert"} className={`rounded-lg px-3 py-2 text-sm ${state.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-700"}`}>
-      {state.message}
-    </p>
-  );
+/** Runs an account action and toasts its result. */
+function toasted(run: (prev: AccountState, form: FormData) => Promise<AccountState>) {
+  return async (prev: AccountState, form: FormData) => {
+    const next = await run(prev, form);
+    toast.result(next);
+    return next;
+  };
 }
 
 function CurrentPassword() {
@@ -28,7 +29,7 @@ function CurrentPassword() {
 }
 
 export function ChangeEmailForm() {
-  const [state, action, pending] = useActionState(requestEmailChange, null);
+  const [, action, pending] = useActionState(toasted(requestEmailChange), null);
   return (
     <form action={action} className="mt-4 grid gap-4 sm:grid-cols-2">
       <label className="block text-sm">
@@ -36,8 +37,7 @@ export function ChangeEmailForm() {
         <input name="email" type="email" autoComplete="email" required maxLength={254} className={input} />
       </label>
       <CurrentPassword />
-      <div className="space-y-3 sm:col-span-2">
-        <Result state={state} />
+      <div className="sm:col-span-2">
         <button type="submit" disabled={pending} className={primary}>
           {pending ? "Sending…" : "Send confirmation link"}
         </button>
@@ -47,7 +47,7 @@ export function ChangeEmailForm() {
 }
 
 export function ChangePasswordForm() {
-  const [state, action, pending] = useActionState(changePassword, null);
+  const [, action, pending] = useActionState(toasted(changePassword), null);
   return (
     <form action={action} className="mt-4 grid gap-4 sm:grid-cols-2">
       <div className="sm:col-span-2 sm:max-w-[calc(50%-0.5rem)]">
@@ -62,8 +62,7 @@ export function ChangePasswordForm() {
         <span className="font-medium">Type it again</span>
         <input name="confirm" type="password" autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} maxLength={200} className={input} />
       </label>
-      <div className="space-y-3 sm:col-span-2">
-        <Result state={state} />
+      <div className="sm:col-span-2">
         <button type="submit" disabled={pending} className={primary}>
           {pending ? "Saving…" : "Change password"}
         </button>
@@ -73,7 +72,7 @@ export function ChangePasswordForm() {
 }
 
 export function DeleteAccountForm({ handle }: { handle: string }) {
-  const [state, action, pending] = useActionState(deleteAccount, null);
+  const [, action, pending] = useActionState(toasted(deleteAccount), null);
   const { confirm } = useDialog();
   return (
     <form
@@ -98,8 +97,7 @@ export function DeleteAccountForm({ handle }: { handle: string }) {
         <input name="handle" required autoComplete="off" spellCheck={false} className={input} />
       </label>
       <CurrentPassword />
-      <div className="space-y-3 sm:col-span-2">
-        <Result state={state} />
+      <div className="sm:col-span-2">
         <button
           type="submit"
           disabled={pending}

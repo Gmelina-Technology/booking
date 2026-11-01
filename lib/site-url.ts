@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 
 /**
  * The site's public address from the environment: SITE_URL if set (e.g.
- * https://courtsidehub.ph), else Vercel's production domain, else null.
+ * https://courthub.ph), else Vercel's production domain, else null.
  * Used as metadataBase, so link previews point at absolute URLs.
  */
 export function configuredSiteUrl(): string | null {

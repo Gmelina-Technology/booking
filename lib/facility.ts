@@ -49,7 +49,7 @@ export type Closure = {
 
 /** The booking platform itself. Edit this to rebrand the site. */
 export const platform = {
-  name: "Courtside",
+  name: "CourtHub",
   tagline: "Online court booking for sports facilities.",
   timeZone: "Asia/Manila",
   currency: "PHP",
@@ -59,7 +59,7 @@ export const platform = {
   /** The longest booking window a business can set. */
   maxBookingWindowDays: 180,
   /** Who runs the site, shown in the privacy notice and terms (/privacy, /terms). Set both before launch. */
-  operator: "Courtside",
+  operator: "CourtHub",
   /** Where people send privacy requests (Data Privacy Act). */
   privacyEmail: "privacy@your-domain.com",
   /** Where owners can ask questions, linked as "Contact" in the footer. Empty hides the link. */

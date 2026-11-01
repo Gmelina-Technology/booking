@@ -11,6 +11,7 @@ import {
   type StaffBookingInput,
 } from "./booking-actions";
 import { staffHref, type StaffQuery } from "./query";
+import { toast } from "@/app/toaster";
 import { formatHour, formatMoney, type Activity } from "@/lib/facility";
 import { isPeakHour, priceFor } from "@/lib/schedule";
 import type { Booking } from "@/lib/store-types";
@@ -184,8 +185,6 @@ function BookingDialog({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [pending, start] = useTransition();
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [form, setForm] = useState<Form>(initial);
   const [availability, setAvailability] = useState<DayAvailability | null>(null);
   const activity = activities.find((a) => a.slug === form.activitySlug);
@@ -220,18 +219,17 @@ function BookingDialog({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
-    if (!editing && !form.kind) return setError("Choose how this booking starts.");
+    if (!editing && !form.kind) return toast.error("Choose how this booking starts.");
     start(async () => {
       if (editing) {
         const result = await editBooking(editing.id, form);
-        if (!result.ok) return setError(result.message);
-        setNotice(result.message);
+        toast.result(result);
+        if (!result.ok) return;
         onSaved(editing.id, form);
         return;
       }
       const result = await createStaffBooking({ ...form, kind: form.kind as NewBookingKind });
-      if (!result.ok || !result.id) return setError(result.message);
+      if (!result.ok || !result.id) return toast.error(result.message);
       onSaved(result.id, form);
     });
   }
@@ -415,8 +413,6 @@ function BookingDialog({
           </label>
         )}
 
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-        {notice && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{notice}</p>}
         <div className="flex items-center justify-between gap-3 border-t border-black/5 pt-4">
           <p className="text-sm text-black/60">
             {block ? (

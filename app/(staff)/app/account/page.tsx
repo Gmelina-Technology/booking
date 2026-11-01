@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { currentViewingAs, requireOwner } from "@/lib/auth";
 import { logoutEverywhere } from "@/app/(platform)/login/actions";
+import { ToastOnLoad } from "@/app/toaster";
 import { ChangeEmailForm, ChangePasswordForm, DeleteAccountForm } from "./account-forms";
 
 export const metadata = { title: "Staff — account & security" };
@@ -35,15 +36,9 @@ async function Account({ searchParams }: { searchParams: Promise<Record<string, 
 
   return (
     <div className="mt-8 space-y-6">
-      {emailChanged && (
-        <p role="status" className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          Your sign-in email is now <strong>{owner.email}</strong>.
-        </p>
-      )}
+      {emailChanged && <ToastOnLoad message={`Your sign-in email is now ${owner.email}.`} param="emailChanged" />}
       {emailTaken && (
-        <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-          Another account already uses that email, so your sign-in email wasn&apos;t changed.
-        </p>
+        <ToastOnLoad tone="error" message="Another account already uses that email, so your sign-in email wasn't changed." param="emailTaken" />
       )}
 
       <section className={card}>

@@ -50,7 +50,7 @@ export function CalendarMock() {
         <span className="h-2.5 w-2.5 rounded-full bg-black/15" />
         <span className="h-2.5 w-2.5 rounded-full bg-black/15" />
         <span className="h-2.5 w-2.5 rounded-full bg-black/15" />
-        <span className="ml-3 truncate rounded-md bg-white px-3 py-0.5 text-xs text-black/40">courtside / app · Bookings</span>
+        <span className="ml-3 truncate rounded-md bg-white px-3 py-0.5 text-xs text-black/40">courthub / app · Bookings</span>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
         <div>
@@ -142,7 +142,7 @@ export function PhoneMock() {
           <span>●●● ▮</span>
         </div>
         <div className="mx-3 mt-3 rounded-2xl bg-gradient-to-br from-lime-400 to-emerald-600 p-4 text-white">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-white/80">@courtsidehub</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-white/80">@courthub</p>
           <p className="mt-1 text-lg font-bold leading-tight">🏓 Pickleball</p>
           <p className="text-xs text-white/85">₱300 / hour · Up to 4 players</p>
         </div>

@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { MIN_PASSWORD_LENGTH } from "@/lib/password-rules";
+import { toast } from "@/app/toaster";
 import { signup, type SignupState } from "./actions";
 
 const input =
   "mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20";
 
-/** Suggests a page name from the business name: "Courtside Hub!" -> "courtside-hub". */
+/** Suggests a page name from the business name: "CourtHub!" -> "courthub". */
 function suggestHandle(name: string) {
   return name
     .toLowerCase()
@@ -21,7 +22,12 @@ function suggestHandle(name: string) {
 
 /** The partner rate, e.g. "₱10 per booked hour, max ₱50 per booking". Sign-up is the one place outside the dashboard that shows it. */
 export default function SignupForm({ feeRate }: { feeRate: string }) {
-  const [state, action, pending] = useActionState<SignupState, FormData>(signup, {
+  const [state, action, pending] = useActionState<SignupState, FormData>(async (prev, form) => {
+    const next = await signup(prev, form);
+    if (next.error) toast.error(next.error);
+    else toast.success(next.notice);
+    return next;
+  }, {
     step: "details",
     error: null,
     notice: null,
@@ -54,7 +60,7 @@ export default function SignupForm({ feeRate }: { feeRate: string }) {
           maxLength={80}
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Courtside Hub"
+          placeholder="CourtHub"
           className={input}
         />
       </label>
@@ -73,7 +79,7 @@ export default function SignupForm({ feeRate }: { feeRate: string }) {
               setHandleEdited(true);
               setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""));
             }}
-            placeholder="courtside-hub"
+            placeholder="courthub"
             className="w-full min-w-0 rounded-r-lg bg-transparent py-2 pr-3 outline-none"
           />
         </div>
@@ -102,11 +108,6 @@ export default function SignupForm({ feeRate }: { feeRate: string }) {
           Cancelled bookings and quiet months cost nothing.
         </span>
       </label>
-      {state.error && (
-        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
-        </p>
-      )}
       <button
         type="submit"
         disabled={pending}
@@ -152,12 +153,6 @@ function VerifyStep({ state, action, pending }: { state: SignupState; action: (f
             className={`${input} text-center font-mono text-2xl tracking-[0.5em]`}
           />
         </label>
-        {state.notice && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{state.notice}</p>}
-        {state.error && (
-          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-            {state.error}
-          </p>
-        )}
         <button
           type="submit"
           disabled={pending}

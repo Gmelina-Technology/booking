@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { createBooking, getAvailability, type Availability } from "@/app/actions";
+import { toast } from "@/app/toaster";
 import { formatHour, formatHourRange, formatMoney, type PeakPricing, type Resource } from "@/lib/facility";
 import { isPeakHour, priceFor } from "@/lib/schedule";
 import { bookableDates, facilityNow, formatDate } from "@/lib/time";
@@ -36,7 +37,6 @@ export default function BookingWidget({ ownerId, activity, bookingWindowDays }: 
   const [resourceId, setResourceId] = useState(activity.resources[0].id);
   const [availability, setAvailability] = useState<Availability | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
-  const [error, setError] = useState<string | null>(null);
   const [loading, startLoading] = useTransition();
   const [submitting, startSubmitting] = useTransition();
 
@@ -65,17 +65,14 @@ export default function BookingWidget({ ownerId, activity, bookingWindowDays }: 
   function pickDate(d: string) {
     setDate(d);
     setSelection(null);
-    setError(null);
   }
 
   function pickResource(id: string) {
     setResourceId(id);
     setSelection(null);
-    setError(null);
   }
 
   function pickHour(h: number) {
-    setError(null);
     if (selection) {
       const end = selection.startHour + selection.hours;
       if (h === selection.startHour) return setSelection(null);
@@ -104,7 +101,7 @@ export default function BookingWidget({ ownerId, activity, bookingWindowDays }: 
       if (result.ok) {
         router.push(`/bookings/${result.token}`);
       } else {
-        setError(result.error);
+        toast.error(result.error);
         load(date);
       }
     });
@@ -277,7 +274,6 @@ export default function BookingWidget({ ownerId, activity, bookingWindowDays }: 
               />
             </label>
 
-            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
             <button
               type="submit"
@@ -300,7 +296,6 @@ export default function BookingWidget({ ownerId, activity, bookingWindowDays }: 
           </form>
         ) : (
           <>
-            {error && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
             <p className="text-sm text-black/50">Select a time slot above to continue.</p>
           </>
         )}
