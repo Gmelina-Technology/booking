@@ -4,17 +4,19 @@ import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
 import { currentViewingAs, requireOwner } from "@/lib/auth";
 import { formatHourRange, formatMoney } from "@/lib/facility";
-import { describeRate } from "@/lib/fee-text";
-import { FLAT_FEES_FROM, isHourly, monthlyStatement, resolveRate } from "@/lib/fees";
+import { describePartnerRate, describeRate } from "@/lib/fee-text";
+import { isHourly, monthlyStatement, nextRateChange, resolveRate } from "@/lib/fees";
 import { listBookings, readFeeSchedule } from "@/lib/store";
 import { addMonths, facilityNow, formatDate } from "@/lib/time";
 import { AcceptFeeTerms } from "./accept-terms";
+import { PageBanners } from "../page-banners";
 
 export const metadata = { title: "Staff — billing" };
 
 export default function BillingPage({ searchParams }: PageProps<"/app/billing">) {
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
+      <PageBanners />
       <h1 className="text-3xl font-bold tracking-tight">Billing</h1>
       <p className="mt-1 text-black/60">No monthly fees. You&apos;re only charged for bookings that were confirmed and played.</p>
       <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-2xl bg-black/5" />}>
@@ -38,6 +40,7 @@ async function Billing({ searchParams }: { searchParams: Promise<Record<string, 
 
   const [schedule, bookings, activities] = await Promise.all([readFeeSchedule(), listBookings({ ownerId: owner.id }), getAllActivities(owner.id)]);
   const rate = resolveRate(schedule, owner.id, now.date);
+  const nextRate = nextRateChange(schedule, owner.id, now.date);
   const statement = monthlyStatement(bookings, schedule, owner.id, month, now);
   const activityName = new Map(activities.map((a) => [a.slug, a.name]));
   const prev = addMonths(`${month}-01`, -1).slice(0, 7);
@@ -55,9 +58,10 @@ async function Billing({ searchParams }: { searchParams: Promise<Record<string, 
               {rate.note ? ` · ${rate.note}` : ""}
             </p>
           )}
-          {isHourly(rate) && (
+          {nextRate && (
             <p className="mt-1 text-sm font-medium text-emerald-700">
-              From {formatDate(FLAT_FEES_FROM, { year: "numeric" })}: {describeRate(resolveRate(schedule, owner.id, FLAT_FEES_FROM))}, however long it runs.
+              From {formatDate(nextRate.from, { year: "numeric" })}: {describeRate(nextRate.rate)}
+              {isHourly(rate) && !isHourly(nextRate.rate) && ", however long it runs"}.
             </p>
           )}
           <p className="mt-2 text-sm text-black/50">Cancelled bookings are never charged. Months with no bookings cost nothing.</p>
@@ -77,7 +81,7 @@ async function Billing({ searchParams }: { searchParams: Promise<Record<string, 
               <p className="mt-1 text-sm text-black/70">Not agreed yet. Only the partner can agree to the fee terms, signed in as themselves.</p>
             </>
           ) : (
-            <AcceptFeeTerms rate={describeRate(rate)} />
+            <AcceptFeeTerms rate={describePartnerRate(schedule, owner.id, now.date)} />
           )}
         </div>
       </section>

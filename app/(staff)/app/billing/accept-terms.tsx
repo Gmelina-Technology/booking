@@ -10,7 +10,7 @@ export function AcceptFeeTerms({ rate }: { rate: string }) {
     <div>
       <p className="text-xs font-semibold uppercase tracking-widest text-amber-700">Please review</p>
       <p className="mt-1 text-sm text-black/70">
-        Partners pay {rate} for each booking that&apos;s confirmed and played. No monthly fees, and nothing for cancelled bookings.
+        Your rate: {rate}, charged for each booking that&apos;s confirmed and played. No monthly fees, and nothing for cancelled bookings.
       </p>
       <button
         disabled={pending}

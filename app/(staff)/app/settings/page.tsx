@@ -8,12 +8,14 @@ import { readSettings } from "@/lib/store";
 import { facilityNow } from "@/lib/time";
 import { Closures } from "./closures";
 import SettingsForm from "./settings-form";
+import { PageBanners } from "../page-banners";
 
 export const metadata = { title: "Staff — payments & alerts" };
 
 export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
+      <PageBanners />
       <h1 className="text-3xl font-bold tracking-tight">Payments &amp; alerts</h1>
       <p className="mt-1 text-black/60">
         What customers see in the downpayment email after you approve their booking.

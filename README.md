@@ -177,7 +177,7 @@ in [`lib/sales.ts`](lib/sales.ts).
 ## Partner fees
 
 Partners (business owners) pay no monthly fee. Each booking is charged once it's confirmed and its
-time slot has ended: one flat fee per booking, however many hours it runs (default ₱20 per booking).
+time slot has ended: one flat fee per booking, however many hours it runs (default ₱15 per booking).
 Cancelled bookings, courts the partner blocked and quiet months cost nothing. No-shows are still
 charged, since the court was held. The calculation is in [`lib/fees.ts`](lib/fees.ts).
 
@@ -190,7 +190,8 @@ an admin gives them a flat promo.
   platform rate and per-partner promo rates at `/admin/fees`, with a preview and change
   history. A new rate starts tomorrow at the earliest, so a fee already charged never changes.
 - **Partners** see their current rate and a monthly statement at `/app/billing`. Sign-up asks
-  them to agree to the current rate, and older accounts accept the fee terms on that page.
+  them to agree to the current rate. Older accounts accept the fee terms on that page, or from the
+  built-in [page banner](#page-banners) that shows on every dashboard page until they do.
 - **The public `/pricing` page** describes the partnership but never states the fee. Partners only
   see their exact rate when signing up and on Billing.
 
@@ -244,6 +245,36 @@ When a new partner finishes signing up (after their email code), every platform 
 - **By email** to each address in `PLATFORM_ADMIN_EMAILS`, with a link to the partner. An admin
   signing up their own business isn't emailed about it. Both are sent after the sign-up response, so
   a slow mail server never holds up the new partner.
+
+### Page banners
+
+`/admin/banners` posts notices at the top of every page of partners' dashboards (`/app`), for things
+they'd miss by not opening the right page (`lib/page-banners.ts`). There are two kinds:
+
+- **Generic** banners just inform. Each partner hides one for themselves with **Got it**.
+- **Custom** banners ask partners to do something, and their button does it (for example **I agree**
+  to the fee terms). A custom banner only shows to partners who still need to act, can't be
+  dismissed, and disappears for each partner once they have.
+
+Custom banners have these actions:
+
+| Action | Button | What it does |
+|--------|--------|--------------|
+| Agree to the per-booking fee | **I agree** | Records the partner's agreement to the fee terms. The banner shows their rate, and any scheduled change to it. |
+| Notify the platform team (in-app only) | **Notify the team** | Tells platform admins in their bell ("<business> responded: <title>"), with no email, e.g. for "Want help setting up?". |
+
+Either kind can have a link to a page with more detail, a style (info or important), a last day, and
+an audience of partners who joined before a date. **End** stops showing a banner; ended ones stay
+listed with how many partners dismissed them. The page shows how many partners each live banner
+still reaches.
+
+Until an admin changes them, a built-in custom banner asks partners who joined before fees to agree
+to them. While viewing as a partner, an admin sees their banners but can't dismiss them or take an
+action only the partner may.
+
+To add a custom action, add its key to `PageBannerAction` in `lib/store-types.ts` and an entry to
+`BANNER_ACTIONS` in `lib/page-banners.ts`: its button label, who still needs to do it, and what it does.
+It then appears in the admin's **Button action** picker.
 
 ### All bookings
 

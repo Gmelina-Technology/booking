@@ -5,12 +5,14 @@ import { requireOwner } from "@/lib/auth";
 import { ownerPath } from "@/lib/owners";
 import { ShareButtons } from "@/app/p/[handle]/share";
 import BusinessForm from "./business-form";
+import { PageBanners } from "../page-banners";
 
 export const metadata = { title: "Staff — business profile" };
 
 export default function BusinessPage({ searchParams }: PageProps<"/app/business">) {
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
+      <PageBanners />
       <h1 className="text-3xl font-bold tracking-tight">Business profile</h1>
       <p className="mt-1 text-black/60">Your public booking page and the details customers see.</p>
       <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-2xl bg-black/5" />}>

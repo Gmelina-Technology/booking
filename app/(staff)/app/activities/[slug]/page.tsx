@@ -4,12 +4,14 @@ import { Suspense } from "react";
 import { getActivity } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
 import ActivityForm from "../activity-form";
+import { PageBanners } from "../../page-banners";
 
 export const metadata = { title: "Staff — edit activity" };
 
 export default function EditActivityPage({ params }: PageProps<"/app/activities/[slug]">) {
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
+      <PageBanners />
       <Link href="/app/activities" className="text-sm text-black/60 hover:underline">
         ← Activities
       </Link>

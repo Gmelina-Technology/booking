@@ -16,6 +16,7 @@ import type {
   BookingFilter,
   InsertOwnerResult,
   Owner,
+  PageBanner,
   PartnerLogEntry,
   PlatformBookingFilter,
   PlatformNotification,
@@ -31,7 +32,7 @@ import type {
 // so one business can never read or change another's data. The exception,
 // listPlatformBookings(), is only for platform admin pages.
 
-export type { Booking, BookingStatus, EmailKind, EmailLogEntry, Owner, PartnerLogEntry, PlatformNotification, ViewAsLogEntry } from "./store-types";
+export type { Booking, BookingStatus, EmailKind, EmailLogEntry, Owner, PageBanner, PartnerLogEntry, PlatformNotification, ViewAsLogEntry } from "./store-types";
 export { SlotTaken } from "./store-types";
 export { deleteUpload, isUploadName, readUpload, saveUpload, UPLOAD_TYPES } from "./uploads";
 
@@ -286,6 +287,18 @@ export function readPlatformNotifications(): Promise<PlatformNotification[]> {
 /** Atomic read-modify-write of the platform notifications. */
 export function updatePlatformNotifications(change: (all: PlatformNotification[]) => PlatformNotification[]): Promise<void> {
   return backend().updatePlatformDoc<PlatformNotification[], void>("notifications", [], (all) => ({ doc: change(all), result: undefined }));
+}
+
+// ---- Page banners (platform-wide) -----------------------------------------
+// Newest first. Until an admin changes them, the built-in ones from lib/page-banners.ts apply.
+
+export function readPageBanners(fallback: PageBanner[]): Promise<PageBanner[]> {
+  return backend().readPlatformDoc("page-banners", fallback);
+}
+
+/** Atomic read-modify-write of the page banners. */
+export function updatePageBanners<R>(fallback: PageBanner[], change: (all: PageBanner[]) => R): Promise<R> {
+  return backend().updatePlatformDoc("page-banners", fallback, (all) => ({ doc: all, result: change(all) }));
 }
 
 // ---- Login rate limiting --------------------------------------------------
