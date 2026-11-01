@@ -2,13 +2,21 @@
 
 import { useActionState } from "react";
 import { RESET_MINUTES } from "@/lib/password-rules";
+import { toast } from "@/app/toaster";
 import { requestPasswordReset, type RequestResetState } from "./actions";
 
 const input =
   "mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20";
 
 export default function RequestResetForm() {
-  const [state, action, pending] = useActionState<RequestResetState, FormData>(requestPasswordReset, { error: null, sent: false, email: "" });
+  const [state, action, pending] = useActionState<RequestResetState, FormData>(
+    async (prev, form) => {
+      const next = await requestPasswordReset(prev, form);
+      toast.error(next.error);
+      return next;
+    },
+    { error: null, sent: false, email: "" },
+  );
 
   if (state.sent) {
     return (
@@ -25,11 +33,6 @@ export default function RequestResetForm() {
         <span className="font-medium">Email</span>
         <input name="email" type="email" autoComplete="email" required autoFocus defaultValue={state.email} className={input} />
       </label>
-      {state.error && (
-        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
-        </p>
-      )}
       <button
         type="submit"
         disabled={pending}

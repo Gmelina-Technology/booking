@@ -16,6 +16,7 @@ import {
   type HeroTemplate,
 } from "@/lib/hero";
 import { resizeImage } from "@/lib/resize-image";
+import { toast } from "@/app/toaster";
 import { useDialog } from "../../dialog";
 import { deleteBannerPhoto, saveBanner, uploadBannerPhoto } from "./actions";
 
@@ -34,7 +35,6 @@ export default function BannerEditor({
   const [saved, setSaved] = useState(initial);
   const [library, setLibrary] = useState(initialLibrary);
   const [device, setDevice] = useState<"desktop" | "phone">("desktop");
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [saving, startSaving] = useTransition();
   const [uploading, setUploading] = useState(false);
   const { confirm } = useDialog();
@@ -42,10 +42,7 @@ export default function BannerEditor({
 
   const dirty = JSON.stringify(s) !== JSON.stringify(saved);
   const template = templates.find((t) => t.id === s.template)!;
-  const set = (patch: Partial<HeroSettings>) => {
-    setResult(null);
-    setS((prev) => ({ ...prev, ...patch }));
-  };
+  const set = (patch: Partial<HeroSettings>) => setS((prev) => ({ ...prev, ...patch }));
 
   function pickTemplate(id: HeroTemplate) {
     const { positions } = templates.find((t) => t.id === id)!;
@@ -64,7 +61,6 @@ export default function BannerEditor({
 
   async function upload(files: FileList | null) {
     if (!files?.length) return;
-    setResult(null);
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
@@ -72,7 +68,7 @@ export default function BannerEditor({
         form.set("photo", await resizeImage(file, { maxEdge: 2000 }));
         const r = await uploadBannerPhoto(form);
         if (!r.ok) {
-          setResult({ ok: false, message: r.error });
+          toast.error(r.error);
           break;
         }
         setLibrary((l) => [...l, r.name]);
@@ -80,7 +76,7 @@ export default function BannerEditor({
         setS((prev) => (prev.images.length < MAX_HERO_IMAGES ? { ...prev, images: [...prev.images, r.name] } : prev));
       }
     } catch (e) {
-      setResult({ ok: false, message: e instanceof Error ? e.message : "Couldn't upload that photo." });
+      toast.error(e instanceof Error ? e.message : "Couldn't upload that photo.");
     } finally {
       setUploading(false);
       if (fileInput.current) fileInput.current.value = "";
@@ -96,10 +92,9 @@ export default function BannerEditor({
   }
 
   function save() {
-    setResult(null);
     startSaving(async () => {
       const r = await saveBanner(s);
-      setResult(r);
+      toast.result(r);
       if (r.ok) setSaved(s);
     });
   }
@@ -367,12 +362,7 @@ export default function BannerEditor({
               Open page ↗
             </Link>
             <div className="ml-auto flex items-center gap-3">
-              {result && (
-                <p role="status" className={`text-sm ${result.ok ? "text-emerald-700" : "text-red-700"}`}>
-                  {result.message}
-                </p>
-              )}
-              {!result && dirty && <p className="text-sm text-black/50">Unsaved changes</p>}
+              {dirty && <p className="text-sm text-black/50">Unsaved changes</p>}
               <button
                 type="button"
                 onClick={() => set({ ...defaultHeroSettings, images: s.images })}

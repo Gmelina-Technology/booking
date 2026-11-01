@@ -2,10 +2,15 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
+import { toast } from "@/app/toaster";
 import { login } from "./actions";
 
 export default function LoginForm({ next }: { next: string }) {
-  const [error, action, pending] = useActionState(login, null);
+  const [, action, pending] = useActionState(async (prev: string | null, form: FormData) => {
+    const error = await login(prev, form);
+    toast.error(error);
+    return error;
+  }, null);
   // Controlled so a failed attempt keeps the email (React resets uncontrolled fields after an action).
   const [email, setEmail] = useState("");
 
@@ -40,11 +45,6 @@ export default function LoginForm({ next }: { next: string }) {
           className="mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20"
         />
       </label>
-      {error && (
-        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </p>
-      )}
       <button
         type="submit"
         disabled={pending}

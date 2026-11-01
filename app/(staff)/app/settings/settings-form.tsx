@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { platform, type PaymentSettings } from "@/lib/facility";
 import { resizeImage } from "@/lib/resize-image";
+import { toast } from "@/app/toaster";
 import { saveSettings, sendTestEmail } from "./actions";
 
 export default function SettingsForm({ settings, smtp }: { settings: PaymentSettings; smtp: boolean }) {
@@ -10,10 +11,8 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
   const [qr, setQr] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(settings.qrPhoto ? `/uploads/${settings.qrPhoto}` : null);
   const [removeQr, setRemoveQr] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [saving, startSaving] = useTransition();
   const [testTo, setTestTo] = useState(settings.staffNotifyEmail);
-  const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
   const [testing, startTesting] = useTransition();
 
   useEffect(() => {
@@ -23,14 +22,13 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
 
   async function pickQr(file: File | undefined) {
     if (!file) return;
-    setResult(null);
     try {
       const resized = await resizeImage(file, { maxEdge: 1000, type: "image/png" });
       setQr(resized);
       setPreview(URL.createObjectURL(resized));
       setRemoveQr(false);
     } catch (e) {
-      setResult({ ok: false, message: e instanceof Error ? e.message : "Couldn't read that image." });
+      toast.error(e instanceof Error ? e.message : "Couldn't read that image.");
     }
   }
 
@@ -38,10 +36,9 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
     form.delete("qrPicker");
     if (qr) form.set("qr", qr);
     if (removeQr) form.set("removeQr", "1");
-    setResult(null);
     startSaving(async () => {
       const r = await saveSettings(form);
-      setResult(r);
+      toast.result(r);
       if (r.ok) setQr(null);
     });
   }
@@ -127,9 +124,6 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
               </button>
             )}
           </div>
-          {result && (
-            <p className={`rounded-lg px-3 py-2 text-sm ${result.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{result.message}</p>
-          )}
           <button
             type="submit"
             disabled={saving}
@@ -159,13 +153,17 @@ export default function SettingsForm({ settings, smtp }: { settings: PaymentSett
           <button
             type="button"
             disabled={testing}
-            onClick={() => startTesting(async () => setTestResult(await sendTestEmail(testTo)))}
+            onClick={() =>
+              startTesting(async () => {
+                const r = await sendTestEmail(testTo);
+                toast.result({ ok: r.ok, message: r.detail });
+              })
+            }
             className="rounded-lg border border-black/10 bg-white px-4 py-2 text-sm font-medium hover:border-emerald-600 disabled:opacity-50"
           >
             {testing ? "Sending…" : "Send test email"}
           </button>
         </div>
-        {testResult && <p className={`mt-2 text-sm ${testResult.ok ? "text-emerald-700" : "text-red-700"}`}>{testResult.detail}</p>}
       </section>
     </div>
   );

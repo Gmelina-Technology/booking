@@ -1,4 +1,4 @@
-# Courtside — booking pages for sports facilities
+# CourtHub — booking pages for sports facilities
 
 A booking platform where each sports facility (business owner) gets its own public page at
 **`/p/@<handle>`**, with activities such as pickleball, badminton, tennis, basketball and table
@@ -313,7 +313,7 @@ reason, which the partner sees:
 The route folders are `app/(platform)/` (platform header and footer), `app/p/[handle]/` (the
 business's own header and footer), and `app/(staff)/` (the signed-in header), which holds the partner
 dashboard in `app/(staff)/app/` and the platform admin area in `app/(staff)/admin/`. The `@` in `/p/@handle` is optional when typed, so
-`/p/courtside-hub` works too.
+`/p/courthub` works too.
 
 ## Customize
 

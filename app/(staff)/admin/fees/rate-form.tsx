@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { formatMoney } from "@/lib/facility";
 import { feeFor } from "@/lib/fees";
-import { addFeeRate, type FeeResult } from "./actions";
+import { toast } from "@/app/toaster";
+import { addFeeRate } from "./actions";
 
 const inputClass =
   "mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20";
@@ -21,14 +22,12 @@ export default function RateForm({
   const [scope, setScope] = useState<"platform" | "owner">("platform");
   const [rate, setRate] = useState(String(current.ratePerHour));
   const [cap, setCap] = useState(current.capPerBooking === null ? "" : String(current.capPerBooking));
-  const [result, setResult] = useState<FeeResult | null>(null);
   const [saving, start] = useTransition();
 
   const preview = { ratePerHour: Number(rate) || 0, capPerBooking: cap.trim() === "" ? null : Number(cap) || 0 };
 
   function submit(form: FormData) {
-    setResult(null);
-    start(async () => setResult(await addFeeRate(form)));
+    start(async () => toast.result(await addFeeRate(form)));
   }
 
   return (
@@ -83,11 +82,6 @@ export default function RateForm({
           <input name="note" maxLength={200} placeholder="e.g. Launch partner deal" className={inputClass} />
         </label>
         <p className="text-xs text-black/50">Changes start tomorrow at the earliest, so fees already charged never change.</p>
-        {result && (
-          <p role="status" className={`rounded-lg px-3 py-2 text-sm ${result.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>
-            {result.message}
-          </p>
-        )}
         <button type="submit" disabled={saving} className="rounded-xl bg-emerald-700 px-6 py-2.5 font-semibold text-white hover:bg-emerald-800 disabled:opacity-60">
           {saving ? "Saving…" : "Save rate"}
         </button>

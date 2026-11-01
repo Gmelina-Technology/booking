@@ -3,20 +3,19 @@
 import { useState, useTransition } from "react";
 import { submitPaymentReference } from "@/app/actions";
 import { resizeImage } from "@/lib/resize-image";
+import { toast } from "@/app/toaster";
 
 export default function PaymentReferenceForm({ token, submitted, due }: { token: string; submitted: string | null; due: number }) {
   const [editing, setEditing] = useState(!submitted);
-  const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<File | null>(null);
   const [pending, start] = useTransition();
 
   async function pickReceipt(file: File | undefined) {
-    setError(null);
     if (!file) return setReceipt(null);
     try {
       setReceipt(await resizeImage(file, { maxEdge: 1400 }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't read that image.");
+      toast.error(e instanceof Error ? e.message : "Couldn't read that image.");
     }
   }
 
@@ -38,13 +37,12 @@ export default function PaymentReferenceForm({ token, submitted, due }: { token:
   return (
     <form
       action={(form) => {
-        setError(null);
         form.delete("receiptPicker");
         if (receipt) form.set("receipt", receipt);
         start(async () => {
           const result = await submitPaymentReference(token, form);
           if (result.ok) setEditing(false);
-          else setError(result.error ?? "Something went wrong.");
+          else toast.error(result.error ?? "Something went wrong.");
         });
       }}
       className="mx-auto mt-5 max-w-sm space-y-3 rounded-xl bg-white p-4 text-left"
@@ -82,7 +80,6 @@ export default function PaymentReferenceForm({ token, submitted, due }: { token:
           className="mt-1 block w-full text-xs text-black/60 file:mr-3 file:rounded-lg file:border-0 file:bg-black/5 file:px-3 file:py-2 file:text-sm"
         />
       </label>
-      {error && <p className="text-sm text-red-700">{error}</p>}
       <button
         type="submit"
         disabled={pending}

@@ -1,23 +1,22 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import type { BusinessProfile } from "@/lib/facility";
 import { socialNetworks } from "@/lib/socials";
+import { toast } from "@/app/toaster";
 import { saveBusiness } from "./actions";
 
 const inputClass =
   "mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20";
 
 export default function BusinessForm({ profile }: { profile: BusinessProfile }) {
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [saving, startSaving] = useTransition();
 
   // onSubmit rather than a form action, which would clear what the owner typed when saving fails.
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    setResult(null);
-    startSaving(async () => setResult(await saveBusiness(form)));
+    startSaving(async () => toast.result(await saveBusiness(form)));
   }
 
   return (
@@ -70,11 +69,6 @@ export default function BusinessForm({ profile }: { profile: BusinessProfile }) 
         >
           {saving ? "Saving…" : "Save"}
         </button>
-        {result && (
-          <p role="status" className={`text-sm ${result.ok ? "text-emerald-700" : "text-red-700"}`}>
-            {result.message}
-          </p>
-        )}
       </div>
     </form>
   );

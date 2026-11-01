@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
+import { toast } from "@/app/toaster";
 import type { Closure } from "@/lib/facility";
 import { formatDate } from "@/lib/time";
 import { addClosure, removeClosure } from "./actions";
 
 /** Days the business, or one activity, is closed: customers can't book them. */
 export function Closures({ closures, activities, today }: { closures: Closure[]; activities: { slug: string; name: string }[]; today: string }) {
-  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [pending, start] = useTransition();
   const name = new Map(activities.map((a) => [a.slug, a.name]));
   const upcoming = closures.filter((c) => c.date >= today);
@@ -24,11 +24,7 @@ export function Closures({ closures, activities, today }: { closures: Closure[];
       </div>
       <form
         action={(form) => {
-          setResult(null);
-          start(async () => {
-            const r = await addClosure(String(form.get("date")), String(form.get("activity")), String(form.get("note")));
-            setResult(r);
-          });
+          start(async () => toast.result(await addClosure(String(form.get("date")), String(form.get("activity")), String(form.get("note")))));
         }}
         className="grid gap-3 sm:grid-cols-[10rem_12rem_minmax(0,1fr)_auto] sm:items-end"
       >
@@ -55,7 +51,6 @@ export function Closures({ closures, activities, today }: { closures: Closure[];
           {pending ? "Adding…" : "Close day"}
         </button>
       </form>
-      {result && <p className={`text-sm ${result.ok ? "text-emerald-700" : "text-red-700"}`}>{result.message}</p>}
       {upcoming.length === 0 ? (
         <p className="text-sm text-black/50">No closures coming up.</p>
       ) : (

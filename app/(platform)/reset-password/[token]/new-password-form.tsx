@@ -2,13 +2,18 @@
 
 import { useActionState } from "react";
 import { MIN_PASSWORD_LENGTH } from "@/lib/password-rules";
+import { toast } from "@/app/toaster";
 import { resetPassword } from "../actions";
 
 const input =
   "mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20";
 
 export default function NewPasswordForm({ token, email }: { token: string; email: string }) {
-  const [error, action, pending] = useActionState(resetPassword, null);
+  const [, action, pending] = useActionState(async (prev: string | null, form: FormData) => {
+    const error = await resetPassword(prev, form);
+    toast.error(error);
+    return error;
+  }, null);
 
   return (
     <form action={action} className="mt-6 space-y-4">
@@ -24,11 +29,6 @@ export default function NewPasswordForm({ token, email }: { token: string; email
         <span className="font-medium">Type it again</span>
         <input name="confirm" type="password" autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} maxLength={200} className={input} />
       </label>
-      {error && (
-        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </p>
-      )}
       <button
         type="submit"
         disabled={pending}
