@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { formatHour, gradients, type Activity, type Resource } from "@/lib/facility";
+import { resizeImage } from "@/lib/resize-image";
 import { WEEKDAY_NAMES } from "@/lib/schedule";
 import { toast } from "@/app/toaster";
 import { saveActivity, type ActivityInput } from "./actions";
@@ -33,8 +34,41 @@ export default function ActivityForm({ activity }: { activity?: Activity }) {
   const [form, setForm] = useState<ActivityInput>(activity ?? blank);
   const [includesText, setIncludesText] = useState(form.includes.join("\n"));
   const [saving, startSaving] = useTransition();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(activity?.background ? `/uploads/${activity.background}` : null);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
-  const set = <K extends keyof ActivityInput>(key: K, value: ActivityInput[K]) => setForm((f) => ({ ...f, [key]: value }));
+  // Release the object URL created for a newly picked photo.
+  useEffect(() => {
+    if (!preview?.startsWith("blob:")) return;
+    return () => URL.revokeObjectURL(preview);
+  }, [preview]);
+
+  async function pickPhoto(file: File | undefined) {
+    if (!file) return;
+    setProcessing(true);
+    try {
+      const resized = await resizeImage(file);
+      setPhoto(resized);
+      setPreview(URL.createObjectURL(resized));
+      setRemovePhoto(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't read that photo.");
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  function clearPhoto() {
+    setPhoto(null);
+    setPreview(null);
+    setRemovePhoto(true);
+    if (fileInput.current) fileInput.current.value = "";
+  }
+
+  const set =<K extends keyof ActivityInput>(key: K, value: ActivityInput[K]) => setForm((f) => ({ ...f, [key]: value }));
 
   function setResource(i: number, patch: Partial<Resource>) {
     set("resources", form.resources.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -46,11 +80,15 @@ export default function ActivityForm({ activity }: { activity?: Activity }) {
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    const files = new FormData();
+    if (photo) files.set("background", photo);
+    if (removePhoto) files.set("removeBackground", "1");
     startSaving(async () => {
-      const result = await saveActivity(activity?.slug ?? null, {
-        ...form,
-        includes: includesText.split("\n"),
-      });
+      const result = await saveActivity(
+        activity?.slug ?? null,
+        { ...form, includes: includesText.split("\n") },
+        files,
+      );
       if (result.ok) router.push("/app/activities");
       else toast.error(result.error);
     });
@@ -111,6 +149,28 @@ export default function ActivityForm({ activity }: { activity?: Activity }) {
                   }`}
                 />
               ))}
+            </div>
+          </div>
+          <div className="mt-4">
+            <span className="text-sm font-medium">Background photo</span>
+            <p className="text-xs text-black/50">
+              Optional. Replaces the colour on your page&apos;s activity card and behind the header of the booking page.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => pickPhoto(e.target.files?.[0])}
+                aria-label="Background photo"
+                className="block text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-3 file:py-2 file:font-medium file:text-emerald-800"
+              />
+              {processing && <span className="text-sm text-black/50">Preparing photo…</span>}
+              {preview && !processing && (
+                <button type="button" onClick={clearPhoto} className="text-sm text-red-700 hover:underline">
+                  Remove photo
+                </button>
+              )}
             </div>
           </div>
         </Card>
@@ -248,7 +308,14 @@ export default function ActivityForm({ activity }: { activity?: Activity }) {
 
       <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
         <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
-          <div className={`flex h-28 items-center justify-center bg-gradient-to-br ${form.gradient} text-5xl`}>{form.emoji}</div>
+          <div className={`relative flex h-28 items-center justify-center bg-gradient-to-br ${form.gradient} text-5xl`}>
+            {preview ? (
+              // eslint-disable-next-line @next/next/no-img-element -- local blob preview
+              <img src={preview} alt="Background photo preview" className="absolute inset-0 h-full w-full object-cover" />
+            ) : (
+              form.emoji
+            )}
+          </div>
           <div className="p-4">
             <p className="font-semibold">{form.name || "Activity name"}</p>
             <p className="text-sm text-black/60">{form.tagline || "Tagline"}</p>
@@ -274,7 +341,7 @@ export default function ActivityForm({ activity }: { activity?: Activity }) {
 
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || processing}
           className="w-full rounded-xl bg-emerald-700 px-6 py-3 font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
         >
           {saving ? "Saving…" : activity ? "Save changes" : "Create activity"}

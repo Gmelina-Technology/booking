@@ -5,12 +5,26 @@ import { updateTag } from "next/cache";
 import { activitiesTag } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
 import { gradients, type Activity } from "@/lib/facility";
-import { deleteActivity, holdsSlot, listBookings, moveActivity, readActivities, upsertActivity } from "@/lib/store";
+import {
+  deleteActivity,
+  deleteUpload,
+  holdsSlot,
+  listBookings,
+  moveActivity,
+  readActivities,
+  saveUpload,
+  UPLOAD_TYPES,
+  upsertActivity,
+} from "@/lib/store";
 import { facilityNow } from "@/lib/time";
 
 // Every action here is staff-only: each one starts with requireOwner() and is scoped to that owner.
 
-export type ActivityInput = Omit<Activity, "slug">;
+// Photos are resized in the browser first, so they stay well under the 1 MB
+// server-action body limit.
+const MAX_PHOTO_BYTES = 950 * 1024;
+
+export type ActivityInput = Omit<Activity, "slug" | "background">;
 export type SaveResult = { ok: true; slug: string } | { ok: false; error: string };
 
 function slugify(name: string) {
@@ -49,8 +63,11 @@ function validate(input: ActivityInput): string | null {
   return null;
 }
 
-/** Creates an activity (originalSlug null) or updates an existing one. */
-export async function saveActivity(originalSlug: string | null, input: ActivityInput): Promise<SaveResult> {
+/**
+ * Creates an activity (originalSlug null) or updates an existing one. `photo` carries the
+ * background: background (File, optional) to replace it, removeBackground ("1") to drop it.
+ */
+export async function saveActivity(originalSlug: string | null, input: ActivityInput, photo?: FormData): Promise<SaveResult> {
   const owner = await requireOwner();
   const error = validate(input);
   if (error) return { ok: false, error };
@@ -86,6 +103,17 @@ export async function saveActivity(originalSlug: string | null, input: ActivityI
     }
   }
 
+  let background = existing?.background ?? null;
+  const file = photo?.get("background");
+  if (file instanceof File && file.size > 0) {
+    const ext = Object.keys(UPLOAD_TYPES).find((k) => UPLOAD_TYPES[k] === file.type);
+    if (!ext) return { ok: false, error: "Background photos must be JPG, PNG or WebP." };
+    if (file.size > MAX_PHOTO_BYTES) return { ok: false, error: "That photo is too large. Try a smaller one." };
+    background = await saveUpload(Buffer.from(await file.arrayBuffer()), ext);
+  } else if (photo?.get("removeBackground") === "1") {
+    background = null;
+  }
+
   const activity: Activity = {
     slug,
     name: input.name.trim(),
@@ -93,6 +121,7 @@ export async function saveActivity(originalSlug: string | null, input: ActivityI
     description: input.description.trim(),
     emoji: input.emoji.trim(),
     gradient: input.gradient,
+    background,
     active: input.active,
     pricePerHour: Math.round(input.pricePerHour),
     noDownpayment: !!input.noDownpayment,
@@ -112,6 +141,7 @@ export async function saveActivity(originalSlug: string | null, input: ActivityI
     includes: input.includes.map((s) => s.trim()).filter(Boolean),
   };
   await upsertActivity(owner.id, activity);
+  if (existing?.background && existing.background !== background) await deleteUpload(existing.background);
   updateTag(activitiesTag(owner.id));
   return { ok: true, slug };
 }
@@ -134,7 +164,9 @@ export async function removeActivity(slug: string): Promise<{ ok: boolean; error
   const owner = await requireOwner();
   if ((await listBookings({ ownerId: owner.id, activitySlug: slug })).length > 0)
     return { ok: false, error: "This activity has bookings, so it can't be deleted. Hide it instead." };
+  const activity = (await readActivities(owner.id)).find((a) => a.slug === slug);
   await deleteActivity(owner.id, slug);
+  if (activity?.background) await deleteUpload(activity.background);
   updateTag(activitiesTag(owner.id));
   return { ok: true };
 }
