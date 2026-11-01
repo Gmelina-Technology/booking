@@ -52,7 +52,7 @@ const VIEWS: { key: ViewKey; section: Section; label: string; match: ((b: Bookin
 ];
 
 const viewHints: Partial<Record<ViewKey, string>> = {
-  requests: "Approve to email the customer the payment QR, or decline. Requests not reviewed in time (see Payments & alerts) are declined automatically.",
+  requests: "Approve to email the customer the payment QR (or confirm straight away for activities with no downpayment), or decline. Requests not reviewed in time (see Payments & alerts) are declined automatically.",
   verify: "The customer says they've paid. Find the reference in your account, then confirm.",
   unpaid: "Approved and emailed, but no payment reference yet. Released automatically once the payment window passes.",
 };
@@ -451,7 +451,7 @@ function BookingRow({ b, activity, showDate, overdueHours }: RowProps) {
         <Payment b={b} overdueHours={overdueHours} />
       </td>
       <td className="py-2.5 pl-3 pr-4">
-        <BookingActions id={b.id} status={b.status} />
+        <BookingActions id={b.id} status={b.status} noDownpayment={!!activity?.noDownpayment} />
       </td>
     </tr>
   );
@@ -476,7 +476,7 @@ function BookingCard({ b, activity, showDate, overdueHours }: RowProps) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <Payment b={b} overdueHours={overdueHours} />
         <div className="ml-auto">
-          <BookingActions id={b.id} status={b.status} />
+          <BookingActions id={b.id} status={b.status} noDownpayment={!!activity?.noDownpayment} />
         </div>
       </div>
     </div>
@@ -543,7 +543,13 @@ function Payment({ b, overdueHours }: { b: Booking; overdueHours: number | null 
     <div className="space-y-1 text-xs">
       <p className="whitespace-nowrap">
         Total <span className="font-semibold">{formatMoney(b.total)}</span>
-        {b.downpayment !== undefined && (
+        {b.downpayment === 0 && (
+          <>
+            {" "}
+            <span className="text-black/30">·</span> Pay at venue
+          </>
+        )}
+        {!!b.downpayment && (
           <>
             {" "}
             <span className="text-black/30">·</span> Down <span className="font-semibold">{formatMoney(b.downpayment)}</span>

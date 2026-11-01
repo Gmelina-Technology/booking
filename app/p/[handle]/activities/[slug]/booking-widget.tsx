@@ -11,6 +11,7 @@ type ActivityInfo = {
   slug: string;
   name: string;
   pricePerHour: number;
+  noDownpayment: boolean;
   openHour: number;
   closeHour: number;
   maxHoursPerBooking: number;
@@ -273,7 +274,10 @@ export default function BookingWidget({ ownerId, activity }: { ownerId: string; 
               {submitting ? "Sending request…" : `Request booking · ${formatMoney(activity.pricePerHour * selection.hours)}`}
             </button>
             <p className="text-center text-xs text-black/50">
-              We hold the slot while staff review it, then email you a QR code to pay the downpayment. Your details go to this facility to
+              {activity.noDownpayment
+                ? "We hold the slot while staff review it, then email you once it's confirmed. No downpayment: you pay at the venue."
+                : "We hold the slot while staff review it, then email you a QR code to pay the downpayment."}{" "}
+              Your details go to this facility to
               manage your booking (
               <Link href="/privacy" target="_blank" className="underline hover:text-black">
                 privacy notice

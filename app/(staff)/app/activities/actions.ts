@@ -88,6 +88,7 @@ export async function saveActivity(originalSlug: string | null, input: ActivityI
     gradient: input.gradient,
     active: input.active,
     pricePerHour: Math.round(input.pricePerHour),
+    noDownpayment: !!input.noDownpayment,
     openHour: input.openHour,
     closeHour: input.closeHour,
     maxHoursPerBooking: input.maxHoursPerBooking,
