@@ -51,6 +51,7 @@ async function ActivityContent({ params }: { params: Promise<{ handle: string; s
             slug: activity.slug,
             name: activity.name,
             pricePerHour: activity.pricePerHour,
+            noDownpayment: !!activity.noDownpayment,
             openHour: activity.openHour,
             closeHour: activity.closeHour,
             maxHoursPerBooking: activity.maxHoursPerBooking,
@@ -69,6 +70,12 @@ async function ActivityContent({ params }: { params: Promise<{ handle: string; s
                 <dt className="text-black/50">Price</dt>
                 <dd className="font-medium">{formatMoney(activity.pricePerHour)} / hour</dd>
               </div>
+              {activity.noDownpayment && (
+                <div className="flex justify-between">
+                  <dt className="text-black/50">Payment</dt>
+                  <dd className="font-medium">At the venue, no downpayment</dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-black/50">Hours</dt>
                 <dd className="font-medium">

@@ -15,6 +15,8 @@ export type Activity = {
   /** Hidden from customers when false. Existing bookings are kept. */
   active: boolean;
   pricePerHour: number;
+  /** No downpayment: approving a request confirms it, and the customer pays the full total at the venue. */
+  noDownpayment?: boolean;
   /** Opening hour (inclusive) and closing hour (exclusive), 24h clock. */
   openHour: number;
   closeHour: number;

@@ -48,7 +48,7 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
   const activity = await getActivity(owner.id, booking.activitySlug);
   const resource = activity?.resources.find((r) => r.id === booking.resourceId);
   const settings = await readSettings(owner.id);
-  const [icon, heading, subheading, color] = header(booking, settings);
+  const [icon, heading, subheading, color] = header(booking, settings, !!activity?.noDownpayment);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
@@ -83,7 +83,13 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
           <dt className="text-black/50">Total</dt>
           <dd className="font-semibold">{formatMoney(booking.total)}</dd>
         </div>
-        {booking.downpayment !== undefined && booking.status !== "cancelled" && (
+        {booking.downpayment === 0 && booking.status !== "cancelled" && (
+          <div className="flex justify-between py-4 text-base">
+            <dt className="font-semibold">Pay at the front desk</dt>
+            <dd className="font-bold text-emerald-700">{formatMoney(booking.total)}</dd>
+          </div>
+        )}
+        {!!booking.downpayment && booking.status !== "cancelled" && (
           <>
             <div className="flex justify-between py-3">
               <dt className="text-black/50">Downpayment</dt>
@@ -116,14 +122,16 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
   );
 }
 
-function header(b: Booking, settings: PaymentSettings): [string, string, string, string] {
+function header(b: Booking, settings: PaymentSettings, noDownpayment: boolean): [string, string, string, string] {
   switch (b.status) {
-    case "pending":
-      return ["⏳", "Request received", `We're checking availability. You'll get an email with payment instructions once staff approve your booking. If they can't review it within ${settings.requestWindowHours} hours, the slot is released and we'll email you.`, "bg-blue-600"];
+    case "pending": {
+      const next = noDownpayment ? "a confirmation" : "payment instructions";
+      return ["⏳", "Request received", `We're checking availability. You'll get an email with ${next} once staff approve your booking. If they can't review it within ${settings.requestWindowHours} hours, the slot is released and we'll email you.`, "bg-blue-600"];
+    }
     case "awaiting_payment":
       return ["💳", "Approved: pay to confirm", `Pay the downpayment within ${settings.paymentWindowHours} hours to lock in your slot.`, "bg-amber-600"];
     case "confirmed":
-      return ["✓", "You're booked!", "Your downpayment is received and your slot is confirmed.", "bg-emerald-700"];
+      return ["✓", "You're booked!", b.downpayment === 0 ? "Your slot is confirmed. Pay at the front desk when you arrive." : "Your downpayment is received and your slot is confirmed.", "bg-emerald-700"];
     case "cancelled":
       return ["✕", "Booking cancelled", b.cancelReason ? `Reason: ${b.cancelReason}` : "This booking is no longer active.", "bg-zinc-500"];
   }

@@ -129,6 +129,21 @@ export default function ActivityForm({ activity }: { activity?: Activity }) {
               onChange={(v) => set("maxHoursPerBooking", v)}
             />
           </div>
+          <label className="mt-4 flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={!form.noDownpayment}
+              onChange={(e) => set("noDownpayment", !e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-emerald-700"
+            />
+            <span>
+              <span className="font-medium">Ask for a downpayment</span>
+              <span className="block text-black/50">
+                Customers pay your downpayment (set in Settings) by QR after you approve. Untick to confirm bookings on approval, with
+                everything paid at the venue.
+              </span>
+            </span>
+          </label>
         </Card>
 
         <Card title="Courts">

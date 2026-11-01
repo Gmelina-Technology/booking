@@ -105,7 +105,7 @@ export function DayPicker({ q, today }: { q: StaffQuery; today: string }) {
 type Status = "pending" | "awaiting_payment" | "confirmed" | "cancelled";
 
 /** Next-step buttons for a booking, depending on where it is in the lifecycle. */
-export function BookingActions({ id, status }: { id: string; status: Status }) {
+export function BookingActions({ id, status, noDownpayment = false }: { id: string; status: Status; noDownpayment?: boolean }) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<StaffResult | null>(null);
   const { confirm, prompt } = useDialog();
@@ -143,9 +143,15 @@ export function BookingActions({ id, status }: { id: string; status: Status }) {
       <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
         {status === "pending" && (
           <>
-            <button className={primary} disabled={pending} onClick={() => run(() => approveBooking(id))} title="Approve and email the customer the payment QR">
-              Approve &amp; send QR
-            </button>
+            {noDownpayment ? (
+              <button className={primary} disabled={pending} onClick={() => run(() => approveBooking(id))} title="Confirm and email the customer. No downpayment: they pay at the venue">
+                Approve &amp; confirm
+              </button>
+            ) : (
+              <button className={primary} disabled={pending} onClick={() => run(() => approveBooking(id))} title="Approve and email the customer the payment QR">
+                Approve &amp; send QR
+              </button>
+            )}
             <button className={danger} disabled={pending} onClick={() => cancel("Decline")}>
               Decline
             </button>

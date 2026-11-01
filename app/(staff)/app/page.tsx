@@ -126,7 +126,7 @@ async function Overview({ searchParams }: { searchParams: Promise<Record<string,
                       {formatDate(b.date)} · {formatHourRange(b.startHour, b.hours)} · <Court b={b} activity={activityBySlug.get(b.activitySlug)} />
                     </p>
                   </div>
-                  <BookingActions id={b.id} status={b.status} />
+                  <BookingActions id={b.id} status={b.status} noDownpayment={!!activityBySlug.get(b.activitySlug)?.noDownpayment} />
                 </li>
               ))}
             </ul>

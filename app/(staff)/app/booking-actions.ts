@@ -1,7 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { getActivity } from "@/lib/activities";
+import { getActivity, getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
 import { bookingEmailContext, logBookingEmail } from "@/lib/booking-mail";
 import { cancelledEmail, confirmedEmail, paymentRequestEmail } from "@/lib/emails";
@@ -56,21 +56,39 @@ function outcome(action: string, mail: MailResult): StaffResult {
   return mail.ok ? { ok: true, message: `${action} ${mail.detail}.` } : { ok: false, message: `${action} but the email failed. ${mail.detail}` };
 }
 
-/** pending → awaiting_payment, and email the customer the downpayment QR. */
+async function sendConfirmation(owner: Owner, booking: Booking): Promise<MailResult> {
+  const mail = await sendMail(confirmedEmail(await context(owner, booking)));
+  await logEmail(owner, booking.id, "confirmed", mail);
+  return mail;
+}
+
+/**
+ * pending → awaiting_payment, and email the customer the downpayment QR. For
+ * activities with no downpayment: pending → confirmed, and email the confirmation.
+ */
 export async function approveBooking(id: string): Promise<StaffResult> {
   const owner = await requireOwner();
-  const settings = await readSettings(owner.id);
-  if (!settings.qrPhoto && !settings.accountNumber)
-    return { ok: false, message: "Add your payment QR code or account number in Settings first." };
+  const [settings, activities] = await Promise.all([readSettings(owner.id), getAllActivities(owner.id)]);
 
   const booking = await transition(owner, id, ["pending"], (b) => {
-    b.status = "awaiting_payment";
     b.approvedAt = new Date().toISOString();
+    if (activities.find((a) => a.slug === b.activitySlug)?.noDownpayment) {
+      b.status = "confirmed";
+      b.downpayment = 0;
+      return;
+    }
+    if (!settings.qrPhoto && !settings.accountNumber) throw new StateError("Add your payment QR code or account number in Settings first.");
+    b.status = "awaiting_payment";
     b.downpayment = downpaymentFor(b.total, settings.downpaymentPercent);
   });
   if (!booking) return { ok: false, message: "Booking not found." };
   if (booking instanceof StateError) return { ok: false, message: booking.message };
 
+  if (booking.status === "confirmed") {
+    const mail = await sendConfirmation(owner, booking);
+    refresh();
+    return outcome("Approved and confirmed.", mail);
+  }
   const mail = await sendPaymentRequest(owner, booking);
   refresh();
   return outcome("Approved.", mail);
@@ -96,8 +114,7 @@ export async function markDownpaymentReceived(id: string): Promise<StaffResult> 
   if (!booking) return { ok: false, message: "Booking not found." };
   if (booking instanceof StateError) return { ok: false, message: booking.message };
 
-  const mail = await sendMail(confirmedEmail(await context(owner, booking)));
-  await logEmail(owner, id, "confirmed", mail);
+  const mail = await sendConfirmation(owner, booking);
   refresh();
   return outcome("Confirmed.", mail);
 }
@@ -209,7 +226,7 @@ export async function createStaffBooking(input: NewStaffBooking): Promise<StaffR
       b.status = "confirmed";
       b.approvedAt = now;
       b.paidAt = now;
-      b.downpayment = downpaymentFor(b.total, settings.downpaymentPercent);
+      b.downpayment = activity.noDownpayment ? 0 : downpaymentFor(b.total, settings.downpaymentPercent);
     });
   }
   refresh();

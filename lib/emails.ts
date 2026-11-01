@@ -109,15 +109,16 @@ Enter your payment reference here: ${ctx.link}
   };
 }
 
-/** Sent when staff mark the downpayment as received. */
+/** Sent when staff mark the downpayment as received, or approve a booking that needs no downpayment. */
 export function confirmedEmail(ctx: Ctx): Mail {
   const { booking } = ctx;
   const paid = booking.downpayment ?? 0;
   const balance = booking.total - paid;
   const extra = [
-    ["Downpayment received", formatMoney(paid)],
-    ...(balance > 0 ? [["Balance at the front desk", formatMoney(balance)]] : []),
+    ...(paid > 0 ? [["Downpayment received", formatMoney(paid)]] : []),
+    ...(balance > 0 ? [[paid > 0 ? "Balance at the front desk" : "Pay at the front desk", formatMoney(balance)]] : []),
   ];
+  const intro = paid > 0 ? "We've received your downpayment and your booking is confirmed." : "Your booking is confirmed.";
   return {
     to: booking.email,
     replyTo: ctx.business.email || undefined,
@@ -127,13 +128,13 @@ export function confirmedEmail(ctx: Ctx): Mail {
       "You're all set!",
       "#047857",
       `<p>Hi ${esc(booking.name)},</p>
-<p>We've received your downpayment and your booking is confirmed. Please arrive 10 minutes early.</p>
+<p>${intro} Please arrive 10 minutes early.</p>
 ${detailsHtml(ctx, extra)}
 ${button(ctx.link, "View your booking")}`,
     ),
     text: `Hi ${booking.name},
 
-We've received your downpayment and your booking is confirmed. Please arrive 10 minutes early.
+${intro} Please arrive 10 minutes early.
 
 ${detailsText(ctx, extra)}
 

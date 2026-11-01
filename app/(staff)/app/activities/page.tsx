@@ -65,6 +65,7 @@ async function ActivityList() {
               {formatMoney(a.pricePerHour)}/hr · {formatHour(a.openHour)}–{formatHour(a.closeHour)} · {a.resources.length}{" "}
               {a.resourceLabel.toLowerCase()}
               {a.resources.length === 1 ? "" : "s"} · {bookingCount(a.slug)} booking{bookingCount(a.slug) === 1 ? "" : "s"}
+              {a.noDownpayment && " · no downpayment"}
             </p>
           </div>
           <ActivityRowActions
