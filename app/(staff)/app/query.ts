@@ -27,12 +27,16 @@ export type StaffQuery = {
   view: ViewKey;
   /** Activity slug, or "" for all spaces. */
   activity: string;
-  /** Include bookings before today. */
+  /** Include bookings before today (the inbox always shows every date: anything there still needs a decision). */
   past: boolean;
   /** Include cancelled bookings in the calendar. */
   cancelled: boolean;
   /** Booking whose details are open. */
   booking: string;
+  /** Search text for the table views: reference, name, phone, email or payment reference. */
+  search: string;
+  /** An empty calendar slot that was clicked, `slug~resourceId~hour`: opens the booking form there. */
+  slot: string;
 };
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -71,7 +75,27 @@ export function parseQuery(sp: SearchParams, today: string, isActivity: (slug: s
     past: sp.past === "1",
     cancelled: sp.cancelled === "1",
     booking: /^[A-Z0-9]{4,16}$/.test(str(sp.booking)) ? str(sp.booking) : "",
+    search: str(sp.q).trim().slice(0, 80),
+    slot: /^[a-z0-9-]{1,60}~[A-Za-z0-9-]{1,60}~\d{1,2}$/.test(str(sp.slot)) ? str(sp.slot) : "",
   };
+}
+
+/** Whether a booking matches the search text (case and spacing ignored for phone numbers). */
+export function matchesSearch(
+  b: { id: string; name: string; email: string; phone: string; paymentRef?: string; notes: string },
+  search: string,
+): boolean {
+  const s = search.trim().toLowerCase();
+  if (!s) return true;
+  const digits = s.replace(/\D/g, "");
+  return (
+    b.id.toLowerCase().includes(s) ||
+    b.name.toLowerCase().includes(s) ||
+    b.email.toLowerCase().includes(s) ||
+    b.notes.toLowerCase().includes(s) ||
+    (b.paymentRef ?? "").toLowerCase().includes(s) ||
+    (digits.length >= 3 && (b.phone.replace(/\D/g, "").includes(digits) || (b.paymentRef ?? "").replace(/\D/g, "").includes(digits)))
+  );
 }
 
 /**
@@ -79,7 +103,7 @@ export function parseQuery(sp: SearchParams, today: string, isActivity: (slug: s
  * closes unless `changes` names one. Defaults are left out to keep URLs short.
  */
 export function staffHref(q: StaffQuery, today: string, changes: Partial<StaffQuery> = {}) {
-  const n = { ...q, booking: "", ...changes };
+  const n = { ...q, booking: "", slot: "", ...changes };
   const section = sectionOf(n);
   const defaultView = section === "inbox" ? "requests" : "all";
   const params = new URLSearchParams();
@@ -90,6 +114,8 @@ export function staffHref(q: StaffQuery, today: string, changes: Partial<StaffQu
   if (n.past) params.set("past", "1");
   if (n.cancelled) params.set("cancelled", "1");
   if (n.booking) params.set("booking", n.booking);
+  if (n.search && section !== "calendar") params.set("q", n.search);
+  if (n.slot) params.set("slot", n.slot);
   const s = params.toString();
   return `/app/${section}${s ? `?${s}` : ""}`;
 }

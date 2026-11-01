@@ -14,6 +14,15 @@ export const statusTone: Record<Booking["status"], { label: string; cls: string;
   cancelled: { label: "Cancelled", cls: "bg-black/[0.03] text-black/40 ring-black/10 line-through hover:bg-black/5", dot: "bg-black/25" },
 };
 
+/** Courts staff blocked (maintenance, private use): grey hatching instead of a status colour. */
+const blockedTone = {
+  label: "Blocked",
+  cls: "bg-[repeating-linear-gradient(45deg,rgb(0_0_0/0.04)_0_6px,rgb(0_0_0/0.08)_6px_12px)] text-black/60 ring-black/15 hover:bg-black/10",
+  dot: "bg-black/40",
+};
+
+const toneOf = (b: Booking) => (b.blocked && b.status !== "cancelled" ? blockedTone : statusTone[b.status]);
+
 export type CalendarProps = {
   /** Already filtered by space, past and cancelled. */
   bookings: Booking[];
@@ -40,7 +49,7 @@ function groupByDate(bookings: Booking[]) {
 }
 
 function Pill({ b, href }: { b: Booking; href: string }) {
-  const tone = statusTone[b.status];
+  const tone = toneOf(b);
   return (
     <Link
       href={href}
@@ -139,7 +148,7 @@ function lanes(list: Booking[]) {
 }
 
 function Block({ b, href, top, lane = 0, of = 1, sub }: { b: Booking; href: string; top: number; lane?: number; of?: number; sub?: string }) {
-  const tone = statusTone[b.status];
+  const tone = toneOf(b);
   return (
     <Link
       href={href}
@@ -242,11 +251,19 @@ export function DayTimeline({
   today,
   date,
   bookingHref,
+  slotHref,
   range,
   nowHour,
   columns,
-}: Omit<CalendarProps, "dayHref"> & Omit<TimeGridExtras, "courtName"> & { columns: Column[] }) {
+}: Omit<CalendarProps, "dayHref"> &
+  Omit<TimeGridExtras, "courtName"> & {
+    columns: Column[];
+    /** Link that opens the booking form on an empty court-hour. */
+    slotHref?: (c: Column, hour: number) => string;
+  }) {
   const onDay = bookings.filter((b) => b.date === date);
+  // Hours staff can still book on this day: none in the past, from the current hour today.
+  const firstFree = date < today ? Infinity : date === today ? (nowHour ?? 0) : 0;
   const multiActivity = new Set(columns.map((c) => c.activity.slug)).size > 1;
   if (columns.length === 0) return <p className="p-10 text-center text-sm text-black/50">No spaces yet. Add one under Activities.</p>;
   return (
@@ -270,9 +287,28 @@ export function DayTimeline({
           const list = onDay.filter((b) => b.activitySlug === c.activity.slug && b.resourceId === c.resourceId);
           // Cancelled bookings can share a court-hour with a live one; the column splits then.
           const placed = lanes(list);
+          const taken = new Set(list.filter((b) => b.status !== "cancelled").flatMap((b) => Array.from({ length: b.hours }, (_, i) => b.startHour + i)));
+          const free = slotHref
+            ? Array.from({ length: range[1] - range[0] }, (_, i) => range[0] + i).filter(
+                (h) => h >= firstFree && h >= c.activity.openHour && h < c.activity.closeHour && !taken.has(h),
+              )
+            : [];
           return (
             <div key={`${c.activity.slug}/${c.resourceId}`} className="relative w-28 flex-1 shrink-0 border-l border-black/5">
               <HourLines range={range} nowHour={date === today ? nowHour : null} />
+              {free.map((h) => (
+                <Link
+                  key={h}
+                  href={slotHref!(c, h)}
+                  scroll={false}
+                  title={`Book ${c.name} at ${formatHour(h)}`}
+                  aria-label={`Book ${c.name} at ${formatHour(h)}`}
+                  className="group absolute inset-x-0.5 flex items-center justify-center rounded-lg text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 hover:ring-1 hover:ring-inset hover:ring-emerald-200"
+                  style={{ top: (h - range[0]) * ROW + 2, height: ROW - 4 }}
+                >
+                  <span className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100">+ {formatHour(h).replace(":00", "")}</span>
+                </Link>
+              ))}
               {list.map((b) => (
                 <Block key={b.id} b={b} href={bookingHref(b.id)} top={range[0]} {...placed.get(b.id)} />
               ))}
@@ -332,6 +368,11 @@ export function Legend({ showCancelled }: { showCancelled: boolean }) {
             {statusTone[s].label}
           </span>
         ))}
+      <span className="flex items-center gap-1.5">
+        <span className={`size-2 rounded-full ${blockedTone.dot}`} />
+        {blockedTone.label}
+      </span>
+      <span>Day view: click an empty hour to book it</span>
     </div>
   );
 }

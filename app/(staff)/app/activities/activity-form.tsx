@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { formatHour, gradients, type Activity, type Resource } from "@/lib/facility";
+import { WEEKDAY_NAMES } from "@/lib/schedule";
 import { saveActivity, type ActivityInput } from "./actions";
 
 const blank: ActivityInput = {
@@ -144,6 +145,58 @@ export default function ActivityForm({ activity }: { activity?: Activity }) {
               </span>
             </span>
           </label>
+
+          <div className="mt-5">
+            <span className="text-sm font-medium">Closed every week on</span>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {WEEKDAY_NAMES.map((day, i) => {
+                const closed = form.closedDays?.includes(i) ?? false;
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    aria-pressed={closed}
+                    onClick={() => set("closedDays", closed ? (form.closedDays ?? []).filter((d) => d !== i) : [...(form.closedDays ?? []), i].sort())}
+                    className={`rounded-lg border px-3 py-1.5 text-sm ${closed ? "border-red-300 bg-red-50 text-red-700" : "border-black/10 hover:border-emerald-600"}`}
+                  >
+                    {day.slice(0, 3)}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-xs text-black/50">Customers can&apos;t book these days. For holidays, add a closure under Payments &amp; alerts.</p>
+          </div>
+
+          <label className="mt-5 flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={!!form.peak}
+              onChange={(e) =>
+                set("peak", e.target.checked ? { pricePerHour: Math.round(form.pricePerHour * 1.25), fromHour: 17, toHour: Math.min(form.closeHour, 22), weekends: true } : null)
+              }
+              className="mt-0.5 h-4 w-4 accent-emerald-700"
+            />
+            <span>
+              <span className="font-medium">Peak-hour price</span>
+              <span className="block text-black/50">Charge more for busy hours, e.g. weeknights and weekends.</span>
+            </span>
+          </label>
+          {form.peak && (
+            <div className="mt-3 grid gap-4 sm:grid-cols-3">
+              <NumberField label="Peak price per hour (₱)" value={form.peak.pricePerHour} min={0} onChange={(v) => set("peak", { ...form.peak!, pricePerHour: v })} />
+              <HourSelect label="Peak from" value={form.peak.fromHour} onChange={(v) => set("peak", { ...form.peak!, fromHour: v })} hours={hourOptions.slice(0, 24)} />
+              <HourSelect label="Peak until" value={form.peak.toHour} onChange={(v) => set("peak", { ...form.peak!, toHour: v })} hours={hourOptions.slice(1)} />
+              <label className="flex items-center gap-2 text-sm sm:col-span-3">
+                <input
+                  type="checkbox"
+                  checked={form.peak.weekends}
+                  onChange={(e) => set("peak", { ...form.peak!, weekends: e.target.checked })}
+                  className="h-4 w-4 accent-emerald-700"
+                />
+                Peak price all day on Saturdays and Sundays
+              </label>
+            </div>
+          )}
         </Card>
 
         <Card title="Courts">

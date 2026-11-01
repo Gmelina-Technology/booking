@@ -80,6 +80,18 @@ describe("bookings", () => {
     expect(await store.insertBooking(slot(b.id, 10))).not.toBeNull();
     expect(await store.updateBooking(b.id, booking.id, (x) => void (x.status = "cancelled"))).toBeNull();
   });
+
+  it("refuses to move a booking onto a taken court-hour, and changes nothing", async () => {
+    const owner = await newOwner("reschedule");
+    const early = (await store.insertBooking(slot(owner.id, 8)))!;
+    await store.insertBooking(slot(owner.id, 12));
+    await expect(store.updateBooking(owner.id, early.id, (b) => void (b.startHour = 11))).rejects.toBeInstanceOf(store.SlotTaken);
+    const [unchanged] = (await store.listBookings({ ownerId: owner.id })).filter((b) => b.id === early.id);
+    expect(unchanged.startHour).toBe(8);
+    // A free time is fine, and so is moving within its own hours.
+    expect((await store.updateBooking(owner.id, early.id, (b) => void (b.startHour = 9)))?.startHour).toBe(9);
+    expect((await store.updateBooking(owner.id, early.id, (b) => void (b.startHour = 10)))?.startHour).toBe(10);
+  });
 });
 
 describe("releasing expired holds", () => {
@@ -93,6 +105,8 @@ describe("releasing expired holds", () => {
     expect(holds.expiryReason(base as never, { ...windows, paymentWindowHours: 48 })).toBeNull();
     expect(holds.expiryReason({ ...base, paymentRef: "REF1234" } as never, windows)).toBeNull();
     expect(holds.expiryReason({ ...base, status: "confirmed" } as never, windows)).toBeNull();
+    // A phone booking staff approved: they collect the payment themselves.
+    expect(holds.expiryReason({ ...base, staffCreated: true } as never, windows)).toBeNull();
   });
 
   it("knows when an unreviewed request has expired", () => {

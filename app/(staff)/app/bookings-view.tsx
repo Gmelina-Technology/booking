@@ -5,13 +5,14 @@ import { getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
 import { formatHourRange, formatMoney, platform, type Activity } from "@/lib/facility";
 import { releaseOverdueHolds } from "@/lib/holds";
+import { isSale, revenueOf } from "@/lib/sales";
 import { holdsSlot, listBookings, readSettings, type Booking } from "@/lib/store";
 import { addDays, addMonths, endOfMonth, facilityNow, formatDate, isoWeek, startOfMonth, startOfWeek } from "@/lib/time";
 import { DayStrip, DayTimeline, Legend, MonthGrid, WeekGrid, hourRange, type Column } from "./calendar";
-import { BookingActions, CopyReference, DayPicker, EraseCustomerButton, ModeSelect, Toolbar } from "./controls";
-import { CreateBooking } from "./create-booking";
+import { ApproveAll, BookingActions, CopyReference, DayPicker, EraseCustomerButton, ModeSelect, Toolbar } from "./controls";
+import { CreateBooking, EditBooking, type BookableActivity } from "./create-booking";
 import { PageHeader } from "./page-header";
-import { staffHref, parseQuery, sectionOf, type StaffQuery, type Section, type ViewKey } from "./query";
+import { matchesSearch, staffHref, parseQuery, sectionOf, type StaffQuery, type Section, type ViewKey } from "./query";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -52,13 +53,13 @@ const VIEWS: { key: ViewKey; section: Section; label: string; match: ((b: Bookin
 ];
 
 const viewHints: Partial<Record<ViewKey, string>> = {
-  requests: "Approve to email the customer the payment QR (or confirm straight away for activities with no downpayment), or decline. Requests not reviewed in time (see Payments & alerts) are declined automatically.",
-  verify: "The customer says they've paid. Find the reference in your account, then confirm.",
-  unpaid: "Approved and emailed, but no payment reference yet. Released automatically once the payment window passes.",
+  requests: "Approve to email the customer the payment QR (or confirm straight away for activities with no downpayment), or decline. Customer requests not reviewed in time (see Payments & alerts) are released automatically, and you get an email when that happens.",
+  verify: "The customer says they've paid. Find the reference in your account, then confirm. Can't find it? Use ⋯ → Payment not found to ask them to check.",
+  unpaid: "Approved, but no payment reference yet. Customer requests are released once the payment window passes; bookings you added yourself wait for you.",
 };
 
-/** What the "New booking" form needs to know about each activity. */
-export function bookable(activities: Activity[]) {
+/** What the booking form needs to know about each activity. */
+export function bookable(activities: Activity[]): BookableActivity[] {
   return activities.map((a) => ({
     slug: a.slug,
     name: a.name,
@@ -69,6 +70,8 @@ export function bookable(activities: Activity[]) {
     maxHoursPerBooking: a.maxHoursPerBooking,
     maxPlayers: a.maxPlayers,
     pricePerHour: a.pricePerHour,
+    peak: a.peak ?? null,
+    noDownpayment: !!a.noDownpayment,
   }));
 }
 
@@ -83,16 +86,18 @@ async function BookingsView({ searchParams, section }: { searchParams: SearchPar
   const [activities, all, settings] = await Promise.all([getAllActivities(owner.id), listBookings({ ownerId: owner.id }), readSettings(owner.id)]);
   const activityBySlug = new Map(activities.map((a) => [a.slug, a]));
   const q = parseQuery(sp, today, (slug) => activityBySlug.has(slug), section);
-  const inActivity = all.filter((b) => !q.activity || b.activitySlug === q.activity);
+  const inActivity = all.filter((b) => (!q.activity || b.activitySlug === q.activity) && (q.mode !== "table" || matchesSearch(b, q.search)));
   const selected = q.booking ? all.find((b) => b.id === q.booking) : undefined;
-  const overdue = overdueIds(all.filter((b) => b.status === "awaiting_payment" && b.date >= today), settings.paymentWindowHours);
+  const overdue = overdueIds(all.filter((b) => b.status === "awaiting_payment" && !b.paymentRef), settings.paymentWindowHours);
   const [title, subtitle] = sectionTitles[section];
+  const forms = bookable(activities);
 
   function rowProps(b: Booking, showDate: boolean): RowProps {
     return {
       b,
       activity: activityBySlug.get(b.activitySlug),
       showDate,
+      today,
       overdueHours: overdue.has(b.id) ? settings.paymentWindowHours : null,
     };
   }
@@ -100,7 +105,7 @@ async function BookingsView({ searchParams, section }: { searchParams: SearchPar
   return (
     <>
       <PageHeader title={title} subtitle={subtitle}>
-        <CreateBooking q={q} today={today} activities={bookable(activities)} />
+        <CreateBooking q={q} today={today} nowHour={now.hour} activities={forms} />
       </PageHeader>
       <Toolbar q={q} today={today} activities={activities.map((a) => ({ slug: a.slug, name: a.name }))} />
 
@@ -110,7 +115,9 @@ async function BookingsView({ searchParams, section }: { searchParams: SearchPar
         <CalendarView q={q} today={today} nowHour={now.hour} bookings={inActivity} activities={activities} />
       )}
 
-      {selected && <BookingPanel closeHref={staffHref(q, today, { booking: "" })} {...rowProps(selected, true)} />}
+      {selected && (
+        <BookingPanel closeHref={staffHref(q, today, { booking: "" })} forms={forms} nowHour={now.hour} {...rowProps(selected, true)} />
+      )}
     </>
   );
 }
@@ -132,6 +139,8 @@ function CalendarView({
   const href = (changes: Partial<StaffQuery>) => staffHref(q, today, changes);
   const bookingHref = (id: string) => href({ booking: id });
   const dayHref = (date: string) => href({ mode: "day", date });
+  // An empty court-hour opens the booking form there.
+  const slotHref = (c: Column, hour: number) => href({ slot: `${c.activity.slug}~${c.resourceId}~${hour}` });
   const activityName = new Map(activities.map((a) => [a.slug, a]));
   const courtName = (b: Booking) => {
     const a = activityName.get(b.activitySlug);
@@ -214,7 +223,16 @@ function CalendarView({
           />
         )}
         {q.mode === "day" && (
-          <DayTimeline bookings={visible} today={today} date={q.date} bookingHref={bookingHref} range={dayRange} nowHour={nowHour} columns={columns} />
+          <DayTimeline
+            bookings={visible}
+            today={today}
+            date={q.date}
+            bookingHref={bookingHref}
+            slotHref={slotHref}
+            range={dayRange}
+            nowHour={nowHour}
+            columns={columns}
+          />
         )}
       </div>
 
@@ -237,7 +255,16 @@ function CalendarView({
             ))}
           </div>
         </div>
-        <DayTimeline bookings={visible} today={today} date={q.date} bookingHref={bookingHref} range={dayRange} nowHour={nowHour} columns={columns} />
+        <DayTimeline
+          bookings={visible}
+          today={today}
+          date={q.date}
+          bookingHref={bookingHref}
+          slotHref={slotHref}
+          range={dayRange}
+          nowHour={nowHour}
+          columns={columns}
+        />
       </div>
 
       <div className="border-t border-black/5 px-4 py-3">
@@ -260,13 +287,15 @@ function TableView({
 }) {
   const tabs = VIEWS.filter((v) => v.section === sectionOf(q));
   const view = tabs.find((v) => v.key === q.view) ?? tabs[0];
-  const listed = q.past ? bookings : bookings.filter((b) => b.date >= today);
+  // The inbox and searches look at every date: an unchecked payment from last week still needs a decision.
+  const allDates = q.past || !!q.search || view.section === "inbox";
+  const listed = allDates ? bookings : bookings.filter((b) => b.date >= today);
   const isSchedule = view.match === null;
   const rows = view.match
     ? listed.filter(view.match).sort((a, b) => a.date.localeCompare(b.date) || a.startHour - b.startHour)
     : bookings.filter((b) => b.date === q.date).sort((a, b) => a.startHour - b.startHour);
-  const active = rows.filter(holdsSlot);
-  const confirmed = rows.filter((b) => b.status === "confirmed");
+  const active = rows.filter((b) => holdsSlot(b) && !b.blocked);
+  const confirmed = rows.filter(isSale);
 
   return (
     <>
@@ -311,22 +340,35 @@ function TableView({
       {isSchedule ? (
         <DayPicker q={q} today={today} />
       ) : (
-        <p className="mt-4 text-sm text-black/50">{q.past ? "All bookings, including past dates" : "Upcoming bookings, all dates"}</p>
+        <p className="mt-4 text-sm text-black/50">
+          {q.search ? `Matching “${q.search}”, all dates` : allDates ? "All bookings, including past dates" : "Upcoming bookings, all dates"}
+        </p>
       )}
       {viewHints[view.key] && <p className="mt-3 text-sm text-black/50">{viewHints[view.key]}</p>}
+      {view.key === "requests" && (
+        <div className="mt-3">
+          <ApproveAll ids={rows.map((b) => b.id)} />
+        </div>
+      )}
 
       {isSchedule && (
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <Stat label="Active bookings" value={String(active.length)} />
           <Stat label="Court-hours booked" value={String(active.reduce((n, b) => n + b.hours, 0))} />
-          <Stat label="Confirmed revenue" value={formatMoney(confirmed.reduce((n, b) => n + b.total, 0))} />
+          <Stat label="Confirmed revenue" value={formatMoney(confirmed.reduce((n, b) => n + revenueOf(b), 0))} />
         </div>
       )}
 
       <div className="mt-6 rounded-2xl border border-black/5 bg-white shadow-sm">
         {rows.length === 0 ? (
           <p className="p-10 text-center text-black/50">
-            {isSchedule ? `No bookings for ${formatDate(q.date, { month: "long" })}.` : q.past ? "No bookings here." : "No upcoming bookings here."}
+            {q.search
+              ? `Nothing matches “${q.search}” here. Try the All tab, or fewer letters.`
+              : isSchedule
+                ? `No bookings for ${formatDate(q.date, { month: "long" })}.`
+                : allDates
+                  ? "No bookings here."
+                  : "No upcoming bookings here."}
           </p>
         ) : (
           <>
@@ -366,8 +408,10 @@ function TableView({
   );
 }
 
+const when = (iso: string) => new Date(iso).toLocaleString(platform.locale, { timeZone: platform.timeZone, dateStyle: "medium", timeStyle: "short" });
+
 /** Side panel with one booking's details and actions, opened from the calendar (?booking=<id>). */
-function BookingPanel({ closeHref, ...props }: RowProps & { closeHref: string }) {
+function BookingPanel({ closeHref, forms, nowHour, ...props }: RowProps & { closeHref: string; forms: BookableActivity[]; nowHour: number }) {
   const { b } = props;
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-labelledby="booking-panel-title">
@@ -385,9 +429,58 @@ function BookingPanel({ closeHref, ...props }: RowProps & { closeHref: string })
           </Link>
         </div>
         <BookingCard {...props} />
+        {!b.erasedAt && (
+          <div className="mx-4 mb-4">
+            <EditBooking b={b} activities={forms} today={props.today} nowHour={nowHour} />
+          </div>
+        )}
+        {b.paymentRef && (
+          <div className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <p className="font-semibold">Customer says they paid</p>
+            <p className="mt-1">
+              Ref <span className="font-mono font-semibold">{b.paymentRef}</span>
+              {b.paymentAmount !== undefined && <> · {formatMoney(b.paymentAmount)}</>}
+              {b.downpayment !== undefined && b.paymentAmount !== undefined && b.paymentAmount < b.downpayment && (
+                <span className="font-semibold text-red-700"> · {formatMoney(b.downpayment - b.paymentAmount)} short</span>
+              )}
+            </p>
+            {b.paymentSubmittedAt && <p className="text-amber-800/70">Sent {when(b.paymentSubmittedAt)}</p>}
+            {b.paymentReceipt && (
+              <a href={`/uploads/${b.paymentReceipt}`} target="_blank" rel="noreferrer" className="mt-2 block">
+                {/* eslint-disable-next-line @next/next/no-img-element -- uploaded receipt, already shrunk */}
+                <img src={`/uploads/${b.paymentReceipt}`} alt="Payment receipt the customer uploaded" className="max-h-64 rounded-lg border border-amber-200 bg-white" />
+                <span className="mt-1 block underline">Open receipt</span>
+              </a>
+            )}
+          </div>
+        )}
         <dl className="mx-4 mb-4 grid grid-cols-2 gap-x-4 gap-y-1 rounded-xl bg-black/[0.02] p-3 text-xs text-black/60">
-          <dt>Requested</dt>
-          <dd className="text-right">{new Date(b.createdAt).toLocaleString(platform.locale, { timeZone: platform.timeZone, dateStyle: "medium", timeStyle: "short" })}</dd>
+          <dt>{b.staffCreated ? "Added by staff" : "Requested"}</dt>
+          <dd className="text-right">{when(b.createdAt)}</dd>
+          {b.rescheduledAt && (
+            <>
+              <dt>Last moved</dt>
+              <dd className="text-right">{when(b.rescheduledAt)}</dd>
+            </>
+          )}
+          {b.paidAt && (
+            <>
+              <dt>Downpayment received</dt>
+              <dd className="text-right">{when(b.paidAt)}</dd>
+            </>
+          )}
+          {b.balancePaidAt && (
+            <>
+              <dt>Paid in full</dt>
+              <dd className="text-right">{when(b.balancePaidAt)}</dd>
+            </>
+          )}
+          {b.noShowAt && (
+            <>
+              <dt>Marked no-show</dt>
+              <dd className="text-right">{when(b.noShowAt)}</dd>
+            </>
+          )}
           {b.cancelReason && (
             <>
               <dt>Cancel reason</dt>
@@ -423,11 +516,12 @@ export type RowProps = {
   activity?: Activity;
   /** Status tabs span many days, so they show the date as well as the time. */
   showDate: boolean;
+  today: string;
   /** The payment window in hours, when this booking is past it. */
   overdueHours: number | null;
 };
 
-function BookingRow({ b, activity, showDate, overdueHours }: RowProps) {
+function BookingRow({ b, activity, showDate, today, overdueHours }: RowProps) {
   return (
     <tr className={`align-top ${b.status === "cancelled" ? "text-black/40" : ""}`}>
       <td className="py-2.5 pl-3 pr-2">
@@ -445,19 +539,19 @@ function BookingRow({ b, activity, showDate, overdueHours }: RowProps) {
         <Customer b={b} />
       </td>
       <td className="px-3 py-3">
-        <StatusBadge status={b.status} />
+        <StatusBadge status={b.status} blocked={b.blocked} />
       </td>
       <td className="px-3 py-3">
         <Payment b={b} overdueHours={overdueHours} />
       </td>
       <td className="py-2.5 pl-3 pr-4">
-        <BookingActions id={b.id} status={b.status} noDownpayment={!!activity?.noDownpayment} />
+        <BookingActions b={b} today={today} noDownpayment={!!activity?.noDownpayment} />
       </td>
     </tr>
   );
 }
 
-function BookingCard({ b, activity, showDate, overdueHours }: RowProps) {
+function BookingCard({ b, activity, showDate, today, overdueHours }: RowProps) {
   return (
     <div className={`space-y-3 p-4 text-sm ${b.status === "cancelled" ? "text-black/40" : ""}`}>
       <div className="flex items-start justify-between gap-3">
@@ -476,7 +570,7 @@ function BookingCard({ b, activity, showDate, overdueHours }: RowProps) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <Payment b={b} overdueHours={overdueHours} />
         <div className="ml-auto">
-          <BookingActions id={b.id} status={b.status} noDownpayment={!!activity?.noDownpayment} />
+          <BookingActions b={b} today={today} noDownpayment={!!activity?.noDownpayment} />
         </div>
       </div>
     </div>
@@ -493,6 +587,14 @@ export function Court({ b, activity }: { b: Booking; activity?: Activity }) {
 }
 
 function Customer({ b }: { b: Booking }) {
+  if (b.blocked) {
+    return (
+      <div className="min-w-0">
+        <p className="truncate font-medium">🚧 {b.name}</p>
+        <p className="text-xs text-black/50">Court blocked: customers can&apos;t book it</p>
+      </div>
+    );
+  }
   return (
     <div className="min-w-0">
       <p className="truncate font-medium" title={`${b.name} · ${b.players} players`}>
@@ -530,40 +632,47 @@ function Customer({ b }: { b: Booking }) {
 function Status({ b, className = "items-start" }: { b: Booking; className?: string }) {
   return (
     <div className={`flex shrink-0 flex-col gap-1 ${className}`}>
-      <StatusBadge status={b.status} />
+      <StatusBadge status={b.status} blocked={b.blocked} />
       <CopyReference id={b.id} />
     </div>
   );
 }
 
 function Payment({ b, overdueHours }: { b: Booking; overdueHours: number | null }) {
+  if (b.blocked) return <p className="text-xs text-black/40">No charge</p>;
   const lastEmail = b.emails?.at(-1);
   const emailLabel = lastEmail && `${lastEmail.kind.replace("_", " ")} email`;
+  const tag = "whitespace-nowrap rounded px-1.5 py-0.5 ring-1";
   return (
     <div className="space-y-1 text-xs">
       <p className="whitespace-nowrap">
         Total <span className="font-semibold">{formatMoney(b.total)}</span>
-        {b.downpayment === 0 && (
+        {b.downpayment === 0 && !b.balancePaidAt && (
           <>
             {" "}
             <span className="text-black/30">·</span> Pay at venue
           </>
         )}
-        {!!b.downpayment && (
+        {!!b.downpayment && !b.balancePaidAt && (
           <>
             {" "}
             <span className="text-black/30">·</span> Down <span className="font-semibold">{formatMoney(b.downpayment)}</span>
+            {b.paidAt && <span className="text-emerald-700"> ✓</span>}
           </>
         )}
       </p>
-      {(b.paymentRef || lastEmail || overdueHours !== null) && (
+      {(b.paymentRef || lastEmail || overdueHours !== null || b.balancePaidAt || b.noShowAt) && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+          {b.balancePaidAt && <span className={`${tag} bg-emerald-50 text-emerald-800 ring-emerald-200`}>Paid in full</span>}
+          {b.noShowAt && <span className={`${tag} bg-red-50 text-red-700 ring-red-200`}>No-show</span>}
           {b.paymentRef && (
             <span
-              className="whitespace-nowrap rounded bg-amber-50 px-1.5 py-0.5 text-amber-800 ring-1 ring-amber-200"
+              className={`${tag} bg-amber-50 text-amber-800 ring-amber-200`}
               title="Payment reference the customer entered"
             >
               Customer ref <span className="font-mono font-semibold">{b.paymentRef}</span>
+              {b.paymentAmount !== undefined && <> · {formatMoney(b.paymentAmount)}</>}
+              {b.paymentReceipt && " · receipt"}
             </span>
           )}
           {lastEmail && (
@@ -592,8 +701,8 @@ const statusStyles: Record<Booking["status"], [string, string]> = {
   cancelled: ["Cancelled", "bg-black/5 text-black/50"],
 };
 
-export function StatusBadge({ status }: { status: Booking["status"] }) {
-  const [label, cls] = statusStyles[status];
+export function StatusBadge({ status, blocked = false }: { status: Booking["status"]; blocked?: boolean }) {
+  const [label, cls] = blocked && status !== "cancelled" ? ["Blocked", "bg-black/10 text-black/70"] : statusStyles[status];
   return <span className={`whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${cls}`}>{label}</span>;
 }
 

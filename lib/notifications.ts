@@ -18,6 +18,7 @@ const titles: Record<NotificationKind, (b: Booking) => string> = {
   new_request: (b) => `New booking request from ${b.name}`,
   payment_submitted: (b) => `${b.name} says they've paid`,
   hold_released: (b) => `Booking ${b.id} was released`,
+  customer_cancelled: (b) => `${b.name} cancelled booking ${b.id}`,
 };
 
 /** "Basketball · Court 1 · Wed, Jan 15 · 9:00 AM – 11:00 AM", plus the payment reference when there is one. */

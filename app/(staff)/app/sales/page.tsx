@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
 import { formatMoney } from "@/lib/facility";
-import { firstMonths, growth, monthSales, monthsEnding, salesByActivity, type MonthSales } from "@/lib/sales";
+import { firstMonths, growth, isSale, monthSales, monthsEnding, revenueOf, salesByActivity, type MonthSales } from "@/lib/sales";
 import { listBookings } from "@/lib/store";
 import { addMonths, endOfMonth, facilityNow } from "@/lib/time";
 import { PageHeader } from "../page-header";
@@ -54,7 +54,7 @@ async function Sales({ searchParams }: { searchParams: Promise<Record<string, st
   const byActivity = salesByActivity(played, month, prevMonth, throughDay);
   const activityName = new Map(activities.map((a) => [a.slug, a.name]));
   const restOfMonth = soFar
-    ? bookings.filter((b) => b.status === "confirmed" && b.date > today && b.date <= endOfMonth(today)).reduce((n, b) => n + b.total, 0)
+    ? bookings.filter((b) => isSale(b) && b.date > today && b.date <= endOfMonth(today)).reduce((n, b) => n + revenueOf(b), 0)
     : 0;
 
   const day = Number(throughDay);

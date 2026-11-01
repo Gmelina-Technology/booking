@@ -280,7 +280,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<SearchParams> 
                         {b.staffCreated && <span className="block text-xs text-black/50">Added by staff</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={b.status} />
+                        <StatusBadge status={b.status} blocked={b.blocked} />
                         {stale && (
                           <span className="mt-1 block text-xs font-medium text-amber-800">
                             waiting {hoursWaiting(b)} h
