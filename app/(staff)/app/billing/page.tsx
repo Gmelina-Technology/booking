@@ -5,7 +5,7 @@ import { getAllActivities } from "@/lib/activities";
 import { currentViewingAs, requireOwner } from "@/lib/auth";
 import { formatHourRange, formatMoney } from "@/lib/facility";
 import { describeRate } from "@/lib/fee-text";
-import { monthlyStatement, resolveRate } from "@/lib/fees";
+import { FLAT_FEES_FROM, isHourly, monthlyStatement, resolveRate } from "@/lib/fees";
 import { listBookings, readFeeSchedule } from "@/lib/store";
 import { addMonths, facilityNow, formatDate } from "@/lib/time";
 import { AcceptFeeTerms } from "./accept-terms";
@@ -55,6 +55,11 @@ async function Billing({ searchParams }: { searchParams: Promise<Record<string, 
               {rate.note ? ` · ${rate.note}` : ""}
             </p>
           )}
+          {isHourly(rate) && (
+            <p className="mt-1 text-sm font-medium text-emerald-700">
+              From {formatDate(FLAT_FEES_FROM, { year: "numeric" })}: {describeRate(resolveRate(schedule, owner.id, FLAT_FEES_FROM))}, however long it runs.
+            </p>
+          )}
           <p className="mt-2 text-sm text-black/50">Cancelled bookings are never charged. Months with no bookings cost nothing.</p>
         </div>
         <div className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
@@ -92,9 +97,8 @@ async function Billing({ searchParams }: { searchParams: Promise<Record<string, 
           </nav>
         </div>
 
-        <dl className="mt-4 grid grid-cols-3 gap-3">
+        <dl className="mt-4 grid grid-cols-2 gap-3">
           <Stat label="Charged bookings" value={String(statement.lines.length)} />
-          <Stat label="Hours booked" value={String(statement.hours)} />
           <Stat label="Total fees" value={formatMoney(statement.total)} strong />
         </dl>
         {statement.upcoming > 0 && (

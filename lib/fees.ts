@@ -1,8 +1,12 @@
 // Partner fees: what the platform earns from each completed booking.
 //
 // Partners pay nothing monthly. A booking is charged once it's confirmed and
-// its time slot has ended; cancelled bookings are never charged. The fee is
-// the hours booked × the rate, capped per booking.
+// its time slot has ended; cancelled bookings are never charged. The fee is a
+// flat amount per booking, however many hours it runs.
+//
+// Before FLAT_FEES_FROM the fee was hourly (hours booked × the rate, capped per
+// booking). Those versions stay in the history so past statements don't change,
+// but they never apply to bookings from that date on.
 //
 // Rates live in the platform "fees" document as a history of versions, edited
 // at /admin/fees. A version only applies from its `effectiveFrom`
@@ -11,14 +15,23 @@
 //
 // Pure functions only (no storage), so they are easy to test (tests/fees.test.ts).
 
-export type FeeRate = {
+/** First booking date charged a flat fee. Hourly rates only apply before it. */
+export const FLAT_FEES_FROM = "2026-11-02";
+
+/** What one booking costs: a flat fee, or the legacy hourly pricing on versions saved before FLAT_FEES_FROM. */
+export type FeePricing =
+  | { perBooking: number }
+  | {
+      ratePerHour: number;
+      /** Most a single booking is charged. null = no cap. */
+      capPerBooking: number | null;
+    };
+
+export type FeeRate = FeePricing & {
   id: string;
   /** "platform" is everyone's default; "owner" is a promo rate for one partner. */
   scope: "platform" | "owner";
   ownerId?: string;
-  ratePerHour: number;
-  /** Most a single booking is charged. null = no cap. */
-  capPerBooking: number | null;
   /** First booking date ("YYYY-MM-DD") the rate applies to. */
   effectiveFrom: string;
   /** Last booking date a promo applies to. Platform rates don't end; a newer one replaces them. */
@@ -30,9 +43,19 @@ export type FeeRate = {
 
 export type FeeSchedule = { rates: FeeRate[] };
 
-/** Used until an admin saves the first rate. */
+/** Used until an admin saves the first flat rate. */
 export const DEFAULT_RATE: FeeRate = {
   id: "default",
+  scope: "platform",
+  perBooking: 20,
+  effectiveFrom: FLAT_FEES_FROM,
+  createdAt: "2026-11-01T00:00:00.000Z",
+  createdBy: "system",
+};
+
+/** The built-in default before flat fees, kept so bookings charged under it keep their fee. */
+export const LEGACY_DEFAULT_RATE: FeeRate = {
+  id: "default-hourly",
   scope: "platform",
   ratePerHour: 10,
   capPerBooking: 50,
@@ -41,19 +64,26 @@ export const DEFAULT_RATE: FeeRate = {
   createdBy: "system",
 };
 
+export const isHourly = (r: FeePricing): r is Extract<FeePricing, { ratePerHour: number }> => "ratePerHour" in r;
+
 export const emptySchedule = (): FeeSchedule => ({ rates: [] });
 
 const latestFirst = (a: FeeRate, b: FeeRate) => b.effectiveFrom.localeCompare(a.effectiveFrom) || b.createdAt.localeCompare(a.createdAt);
 
 /** The rate for one partner's booking on `date`: an active promo, else the platform rate in effect then. */
 export function resolveRate(schedule: FeeSchedule, ownerId: string, date: string): FeeRate {
-  const applies = (r: FeeRate) => r.effectiveFrom <= date && (!r.until || date <= r.until);
+  const applies = (r: FeeRate) => r.effectiveFrom <= date && (!r.until || date <= r.until) && !(isHourly(r) && date >= FLAT_FEES_FROM);
   const promo = schedule.rates.filter((r) => r.scope === "owner" && r.ownerId === ownerId && applies(r)).sort(latestFirst)[0];
   if (promo) return promo;
-  return schedule.rates.filter((r) => r.scope === "platform" && applies(r)).sort(latestFirst)[0] ?? DEFAULT_RATE;
+  const platform = [...schedule.rates.filter((r) => r.scope === "platform"), DEFAULT_RATE, LEGACY_DEFAULT_RATE];
+  return platform.filter(applies).sort(latestFirst)[0];
 }
 
-export function feeFor(rate: Pick<FeeRate, "ratePerHour" | "capPerBooking">, hours: number): number {
+/** True once a rate can't apply to bookings after `today`: a promo past its end, or any hourly rate once flat fees started. */
+export const hasEnded = (r: FeeRate, today: string) => (!!r.until && r.until <= today) || (isHourly(r) && today >= FLAT_FEES_FROM);
+
+export function feeFor(rate: FeePricing, hours: number): number {
+  if (!isHourly(rate)) return rate.perBooking;
   const fee = rate.ratePerHour * hours;
   return rate.capPerBooking === null ? fee : Math.min(fee, rate.capPerBooking);
 }
@@ -92,7 +122,6 @@ export function monthlyStatement<B extends BillableBooking>(
   return {
     lines,
     total: lines.reduce((sum, l) => sum + l.fee, 0),
-    hours: lines.reduce((sum, l) => sum + l.booking.hours, 0),
     upcoming: inMonth.filter((b) => billable(b) && !isCharged(b, now)).length,
   };
 }

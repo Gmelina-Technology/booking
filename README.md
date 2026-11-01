@@ -177,10 +177,14 @@ in [`lib/sales.ts`](lib/sales.ts).
 ## Partner fees
 
 Partners (business owners) pay no monthly fee. Each booking is charged once it's confirmed and its
-time slot has ended: hours booked × the rate, capped per booking (default ₱10 per booked hour, at
-most ₱50 per booking). Cancelled bookings, courts the partner blocked and quiet months cost
-nothing. No-shows are still charged, since the court was held. The calculation is in
-[`lib/fees.ts`](lib/fees.ts).
+time slot has ended: one flat fee per booking, however many hours it runs (default ₱20 per booking).
+Cancelled bookings, courts the partner blocked and quiet months cost nothing. No-shows are still
+charged, since the court was held. The calculation is in [`lib/fees.ts`](lib/fees.ts).
+
+Before 2 Nov 2026 (`FLAT_FEES_FROM`) fees were hourly (hours booked × the rate, capped per booking).
+Those rate versions stay in the history so past statements keep their fees, but they never apply to
+bookings from that date on: hourly promos end there, and partners get the flat platform rate unless
+an admin gives them a flat promo.
 
 - **Platform admins** (accounts whose email is in `PLATFORM_ADMIN_EMAILS`, comma-separated) set the
   platform rate and per-partner promo rates at `/admin/fees`, with a preview and change
