@@ -23,7 +23,7 @@ Checks (the same ones CI runs on every pull request, in `.github/workflows/ci.ym
 ```bash
 npm run lint
 npx next typegen && npx tsc --noEmit
-npm test        # Vitest: sessions, passwords, reset links, bookings, holds, rate limits, fees
+npm test        # Vitest: sessions, passwords, reset links, bookings, holds, rate limits, fees, sales
 npm run build
 ```
 
@@ -131,6 +131,23 @@ submissions an hour per IP and 5 per booking.
 In the bookings table, the booking reference is the first column. Click it to copy it (cards on
 smaller screens have the same copy button).
 
+## Sales
+
+**Sales** (`/admin/sales`) shows each partner how their business is growing. The calculations are
+in [`lib/sales.ts`](lib/sales.ts).
+
+- **Revenue** is the total of confirmed bookings, counted on the day they're played. Pending,
+  awaiting-payment and cancelled bookings aren't revenue.
+- The four figures at the top (revenue, confirmed bookings, average booking, customers) are compared
+  with the month before. The current month is compared with the same days of last month, so a month
+  that's only half played doesn't look like a drop. Confirmed bookings still to come this month are
+  shown under the revenue.
+- **Customers** are matched by email, or by phone when there's no email. A customer is **new** in the
+  month of their first confirmed booking. Bookings with erased customer details still count as
+  revenue but not as customers.
+- A 12-month revenue chart (click a bar to open that month), revenue by activity, and a month-by-month
+  table with hours, new customers and cancellations.
+
 ## Partner fees
 
 Partners (business owners) pay no monthly fee. Each booking is charged once it's confirmed and its
@@ -193,6 +210,7 @@ Every email sent is logged on the booking. A failed send shows in red in the sta
 | `/account/confirm-email/<token>` | Confirms a new sign-in email from the emailed link |
 | `/privacy`, `/terms` | Privacy notice and terms of service (linked from every footer, sign-up and the booking form) |
 | `/admin` | Staff overview: what needs a decision, today's schedule, this week's totals |
+| `/admin/sales` | Sales: revenue, bookings and customers by month, compared with the month before |
 | `/admin/inbox` | New requests, payments to verify, and approved bookings awaiting payment |
 | `/admin/calendar` | Month, week and day calendar of bookings |
 | `/admin/bookings` | All bookings by status, plus the day-by-day schedule |
