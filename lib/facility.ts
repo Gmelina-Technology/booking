@@ -14,6 +14,8 @@ export type Activity = {
   emoji: string;
   /** One of `gradients` below (Tailwind classes for the card header). */
   gradient: string;
+  /** Photo shown on the card and behind the activity page header instead of the gradient (a name in the uploads store). */
+  background?: string | null;
   /** Hidden from customers when false. Existing bookings are kept. */
   active: boolean;
   pricePerHour: number;

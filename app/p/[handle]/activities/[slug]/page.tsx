@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getActivity } from "@/lib/activities";
+import { photoUrl } from "@/lib/events";
 import { formatHour, formatMoney, paymentReady } from "@/lib/facility";
 import { getPublicOwner, ownerFromParams, ownerPath } from "@/lib/owners";
 import { WEEKDAY_NAMES } from "@/lib/schedule";
@@ -33,8 +35,15 @@ async function ActivityContent({ params }: { params: Promise<{ handle: string; s
 
   return (
     <>
-      <section className={`bg-gradient-to-br ${activity.gradient} text-white`}>
-        <div className="mx-auto max-w-6xl px-4 py-12">
+      <section className={`relative isolate overflow-hidden bg-gradient-to-br ${activity.gradient} text-white`}>
+        {activity.background && (
+          <>
+            <Image src={photoUrl(activity.background)} alt="" fill unoptimized priority sizes="100vw" className="-z-10 object-cover" />
+            {/* Keeps the white heading readable on light photos. */}
+            <div className="absolute inset-0 -z-10 bg-gradient-to-r from-black/70 via-black/40 to-black/10" />
+          </>
+        )}
+        <div className={`mx-auto max-w-6xl px-4 ${activity.background ? "py-16 sm:py-24" : "py-12"}`}>
           <Link href={ownerPath(owner.handle, "#activities")} className="text-sm font-medium text-white/80 hover:text-white">
             ← All activities
           </Link>

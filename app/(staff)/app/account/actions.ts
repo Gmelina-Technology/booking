@@ -24,6 +24,7 @@ import {
   deleteUpload,
   holdsSlot,
   listBookings,
+  readActivities,
   readEvents,
   readHero,
   readSettings,
@@ -117,10 +118,19 @@ export async function deleteAccount(_prev: AccountState, form: FormData): Promis
     };
   }
 
-  const [settings, hero, events] = await Promise.all([readSettings(owner.id), readHero(owner.id), readEvents(owner.id)]);
-  const uploads = [settings.qrPhoto, ...hero.library, ...events.map((e) => e.photo), ...bookings.map((b) => b.paymentReceipt)].filter(
-    (n): n is string => !!n,
-  );
+  const [settings, hero, events, activities] = await Promise.all([
+    readSettings(owner.id),
+    readHero(owner.id),
+    readEvents(owner.id),
+    readActivities(owner.id),
+  ]);
+  const uploads = [
+    settings.qrPhoto,
+    ...hero.library,
+    ...events.map((e) => e.photo),
+    ...activities.map((a) => a.background),
+    ...bookings.map((b) => b.paymentReceipt),
+  ].filter((n): n is string => !!n);
 
   await deleteOwner(owner.id);
   // Files go after the records, so a failure here leaves unused files, never broken pages.
