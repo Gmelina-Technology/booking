@@ -3,7 +3,7 @@ import type { BusinessProfile } from "./facility";
 import type { MailResult } from "./mailer";
 import { updateBooking, type Booking, type EmailKind } from "./store";
 
-// Shared by staff actions (app/(staff)/admin/booking-actions.ts) and the
+// Shared by staff actions (app/(staff)/app/booking-actions.ts) and the
 // automatic release of unpaid holds (lib/holds.ts).
 
 /** What the customer emails in lib/emails.ts need. `base` is siteUrl(), read while the request is still open. */

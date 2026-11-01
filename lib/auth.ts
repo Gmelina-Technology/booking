@@ -93,7 +93,7 @@ export async function requireOwner(): Promise<Owner> {
  * so a platform admin viewing as them is sent to the page that says so.
  */
 export async function requireAccountHolder(): Promise<Owner> {
-  if (await currentViewingAs()) redirect("/admin/account");
+  if (await currentViewingAs()) redirect("/app/account");
   return requireOwner();
 }
 

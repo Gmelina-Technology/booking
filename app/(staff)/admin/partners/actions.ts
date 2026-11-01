@@ -25,7 +25,7 @@ export async function startViewingAs(ownerId: string): Promise<void> {
     expires,
   });
   await logViewAs({ at: new Date().toISOString(), event: "start", adminEmail: admin.email, ownerId: partner.id, ownerHandle: partner.handle });
-  redirect("/admin");
+  redirect("/app");
 }
 
 export async function stopViewingAs(): Promise<void> {
@@ -39,5 +39,5 @@ export async function stopViewingAs(): Promise<void> {
       ownerId: viewing.partner.id,
       ownerHandle: viewing.partner.handle,
     });
-  redirect(viewing ? "/admin/partners" : "/admin");
+  redirect(viewing ? "/admin/partners" : "/app");
 }

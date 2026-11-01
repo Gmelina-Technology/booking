@@ -5,7 +5,7 @@
 // the hours booked × the rate, capped per booking.
 //
 // Rates live in the platform "fees" document as a history of versions, edited
-// at /admin/platform-fees. A version only applies from its `effectiveFrom`
+// at /admin/fees. A version only applies from its `effectiveFrom`
 // date, and new versions must start in the future, so editing a rate never
 // changes a fee that's already been charged.
 //
