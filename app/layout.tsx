@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { platform } from "@/lib/facility";
+import { configuredSiteUrl } from "@/lib/site-url";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,7 +14,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const base = configuredSiteUrl();
+
 export const metadata: Metadata = {
+  // Link previews (og:image, og:url) need absolute URLs. Without SITE_URL, Next falls back to localhost.
+  ...(base && { metadataBase: new URL(base) }),
   title: { default: `${platform.name} — Book a court`, template: `%s · ${platform.name}` },
   description: platform.tagline,
 };

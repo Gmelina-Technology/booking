@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { BusinessProfile } from "@/lib/facility";
+import { socialNetworks } from "@/lib/socials";
 import { saveBusiness } from "./actions";
 
 const inputClass =
@@ -11,13 +12,21 @@ export default function BusinessForm({ profile }: { profile: BusinessProfile }) 
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [saving, startSaving] = useTransition();
 
-  function submit(form: FormData) {
+  // onSubmit rather than a form action, which would clear what the owner typed when saving fails.
+  function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
     setResult(null);
     startSaving(async () => setResult(await saveBusiness(form)));
   }
 
   return (
-    <form action={submit} className="space-y-4 rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
+    <form
+      // Remount after a save so the inputs show the saved values (handles become full links).
+      key={JSON.stringify(profile)}
+      onSubmit={submit}
+      className="space-y-4 rounded-2xl border border-black/5 bg-white p-5 shadow-sm"
+    >
       <h2 className="font-semibold">Shown on your page and in emails</h2>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Business name" name="name" defaultValue={profile.name} required maxLength={80} />
@@ -36,6 +45,23 @@ export default function BusinessForm({ profile }: { profile: BusinessProfile }) 
       <p className="text-xs text-black/50">
         Customers see the phone (or email) when they need to change a booking. Replies to booking emails go to the contact email.
       </p>
+      <fieldset className="border-t border-black/5 pt-4">
+        <legend className="sr-only">Social media</legend>
+        <h3 className="font-semibold">Social media</h3>
+        <p className="mt-1 text-xs text-black/50">Paste your profile link or type your handle. Linked from your page. Leave blank to hide.</p>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          {socialNetworks.map((n) => (
+            <Field
+              key={n.key}
+              label={n.label}
+              name={`social-${n.key}`}
+              defaultValue={profile.socials?.[n.key] ?? ""}
+              maxLength={300}
+              placeholder={n.profile("yourfacility").replace(/^https:\/\/(www\.)?/, "")}
+            />
+          ))}
+        </div>
+      </fieldset>
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="submit"

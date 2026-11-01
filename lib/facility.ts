@@ -2,6 +2,8 @@
 // on the site; each business edits its own profile at /app/business and its
 // activities at /app/activities (`defaultActivities` only seeds them).
 
+import type { SocialLinks } from "./socials";
+
 export type Resource = { id: string; name: string };
 
 export type Activity = {
@@ -56,6 +58,8 @@ export type BusinessProfile = {
   phone: string;
   /** Public contact email (may differ from the sign-in email). */
   email: string;
+  /** Social media accounts linked from the page. Missing on profiles saved before this existed. */
+  socials?: SocialLinks;
 };
 
 export function defaultProfile(name: string, email: string): BusinessProfile {
