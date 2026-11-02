@@ -21,7 +21,7 @@ async function Nav() {
  */
 function NavLinks({ signedIn, hasVenues }: { signedIn: boolean; hasVenues: boolean }) {
   const links = [
-    ...(hasVenues ? [{ href: "/#businesses", label: "Find a venue" }] : []),
+    ...(hasVenues ? [{ href: "/venues", label: "Find a venue" }] : []),
     { href: "/pricing", label: "Pricing" },
     ...(signedIn ? [] : [{ href: "/login", label: "Sign in" }]),
   ];

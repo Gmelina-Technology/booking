@@ -5,6 +5,7 @@ import type { BusinessProfile } from "@/lib/facility";
 import { socialNetworks } from "@/lib/socials";
 import { toast } from "@/app/toaster";
 import { saveBusiness } from "./actions";
+import LocationPicker from "./location-picker";
 
 const inputClass =
   "mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20";
@@ -41,6 +42,7 @@ export default function BusinessForm({ profile }: { profile: BusinessProfile }) 
           placeholder="hello@yourfacility.com"
         />
       </div>
+      <LocationPicker initial={profile.lat != null && profile.lng != null ? { lat: profile.lat, lng: profile.lng } : null} />
       <p className="text-xs text-black/50">
         Customers see the phone (or email) when they need to change a booking. Replies to booking emails go to the contact email.
       </p>

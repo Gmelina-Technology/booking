@@ -321,6 +321,15 @@ export const postgresStore: StoreBackend = {
     }));
   },
 
+  async countBookingsByOwner() {
+    const q = await db();
+    const rows = await q<{ owner_id: string; n: number }[]>`
+      SELECT owner_id, count(*)::int AS n FROM bookings
+      WHERE owner_id IS NOT NULL AND status <> 'cancelled' AND NOT coalesce((data->>'blocked')::boolean, false)
+      GROUP BY owner_id`;
+    return Object.fromEntries(rows.map((r) => [r.owner_id, r.n]));
+  },
+
   async findBooking(by, value) {
     const q = await db();
     const rows =
