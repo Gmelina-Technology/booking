@@ -3,7 +3,10 @@
 import { refresh, updateTag } from "next/cache";
 import { requireOwner } from "@/lib/auth";
 import type { BusinessProfile } from "@/lib/facility";
+import { isLatLng, type LatLng } from "@/lib/geo";
+import { geocode } from "@/lib/geocode";
 import { isPaused, OWNERS_TAG } from "@/lib/owners";
+import { overLimit } from "@/lib/rate-limit";
 import { normalizeSocial, socialNetworks, type SocialLinks } from "@/lib/socials";
 import { updateOwner } from "@/lib/store";
 import { addDays, facilityNow, isValidDate } from "@/lib/time";
@@ -12,6 +15,25 @@ import { addDays, facilityNow, isValidDate } from "@/lib/time";
 // and page status.
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const HOUR = 3600_000;
+
+/** Address lookups per owner per hour, so the free geocoder isn't hammered. */
+const LOOKUPS_PER_HOUR = 20;
+
+const round = (n: number) => Math.round(n * 1e6) / 1e6;
+
+async function lookUp(ownerId: string, address: string): Promise<LatLng | null> {
+  if (await overLimit(`geocode:${ownerId}`, LOOKUPS_PER_HOUR, HOUR)) return null;
+  const found = await geocode(address);
+  return found && { lat: round(found.lat), lng: round(found.lng) };
+}
+
+/** "Find on map": where the typed address is, for the pin picker. */
+export async function locateAddress(address: string): Promise<{ ok: true; pin: LatLng } | { ok: false; message: string }> {
+  const owner = await requireOwner();
+  const pin = await lookUp(owner.id, String(address).slice(0, 200));
+  return pin ? { ok: true, pin } : { ok: false, message: "Couldn't find that address. Drag the pin to your venue instead." };
+}
 
 export async function saveBusiness(form: FormData): Promise<{ ok: boolean; message: string }> {
   const owner = await requireOwner();
@@ -36,11 +58,26 @@ export async function saveBusiness(form: FormData): Promise<{ ok: boolean; messa
   }
   profile.socials = socials;
 
+  // A pin the owner placed wins. Without one, place it from the address, and
+  // move an untouched pin when the address changed.
+  const lat = parseFloat(text("lat", 20));
+  const lng = parseFloat(text("lng", 20));
+  const before = owner.profile;
+  let pin: LatLng | null = isLatLng(lat, lng) ? { lat: round(lat), lng: round(lng) } : null;
+  const untouched = pin?.lat === before.lat && pin?.lng === before.lng;
+  if (profile.address && (!pin || (untouched && profile.address !== before.address))) {
+    pin = (await lookUp(owner.id, profile.address)) ?? pin;
+  }
+  if (pin) Object.assign(profile, pin);
+
   await updateOwner(owner.id, (o) => {
     o.profile = profile;
   });
   updateTag(OWNERS_TAG);
   refresh();
+  if (profile.address && !pin) {
+    return { ok: true, message: "Saved. We couldn't find your address on the map, so drag the pin to your venue so players nearby can find you." };
+  }
   return { ok: true, message: "Saved. Your page is updated." };
 }
 

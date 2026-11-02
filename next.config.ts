@@ -14,7 +14,9 @@ const csp = [
   // Uploads are served from /uploads; stock banner photos come from Unsplash.
   "img-src 'self' blob: data: https://images.unsplash.com",
   "font-src 'self'",
-  "connect-src 'self'",
+  // Map styles, tiles and labels (lib/geo.ts); MapLibre draws them in a blob: worker.
+  "connect-src 'self' https://tiles.openfreemap.org",
+  "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -31,7 +33,7 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   // Booking and reset links hold secret tokens: send other sites the origin only.
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self), payment=()" },
 ];
 
 const nextConfig: NextConfig = {

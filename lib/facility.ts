@@ -82,6 +82,9 @@ export type BusinessProfile = {
   email: string;
   /** Social media accounts linked from the page. Missing on profiles saved before this existed. */
   socials?: SocialLinks;
+  /** Map pin, so players can find the nearest venue. Missing until the address is placed on the map. */
+  lat?: number;
+  lng?: number;
 };
 
 export function defaultProfile(name: string, email: string): BusinessProfile {

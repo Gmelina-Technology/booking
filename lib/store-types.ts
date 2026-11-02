@@ -238,6 +238,8 @@ export interface StoreBackend {
    * loading them. `today` is the facility's date. Platform admins only.
    */
   summarizePlatformBookings(filter: PlatformBookingFilter, today: string, nowMs: number): Promise<PlatformBookingSummary[]>;
+  /** Bookings per owner id, not counting cancelled ones or blocked courts. Owners with none are left out. */
+  countBookingsByOwner(): Promise<Record<string, number>>;
   findBooking(by: "id" | "accessToken", value: string): Promise<Booking | undefined>;
   /** Inserts the booking, or returns false if it overlaps an active booking on the same court. */
   insertBooking(booking: Booking): Promise<boolean>;
