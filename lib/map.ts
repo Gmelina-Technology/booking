@@ -5,6 +5,8 @@ import { mapStyle, type LatLng } from "./geo";
 
 export async function createMap(container: HTMLElement, center: LatLng, zoom: number) {
   const ml = await import("maplibre-gl");
+  // Copied into public/ by scripts/copy-map-worker.mts; the version busts old caches.
+  ml.setWorkerUrl(`/maplibre-gl-worker.mjs?v=${ml.getVersion()}`);
   // Each map gets its own element: an effect that re-runs (Strict Mode) can
   // remove its late map without stripping the classes off the next one.
   const el = container.appendChild(document.createElement("div"));
