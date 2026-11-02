@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Claude Code session worktrees
 /.claude/worktrees/
+
+# MapLibre worker, copied from node_modules by scripts/copy-map-worker.mts
+/public/maplibre-gl-worker.mjs

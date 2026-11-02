@@ -151,6 +151,21 @@ describe("releasing expired holds", () => {
   });
 });
 
+describe("booking counts", () => {
+  it("counts each owner's bookings, leaving out cancelled ones", async () => {
+    const busy = await newOwner("busy");
+    const quiet = await newOwner("quiet");
+    await store.insertBooking(slot(busy.id, 8));
+    await store.insertBooking(slot(busy.id, 10));
+    const cancelled = (await store.insertBooking(slot(busy.id, 12)))!;
+    await store.updateBooking(busy.id, cancelled.id, (b) => void (b.status = "cancelled"));
+
+    const counts = await store.countBookingsByOwner();
+    expect(counts[busy.id]).toBe(2);
+    expect(counts[quiet.id]).toBeUndefined();
+  });
+});
+
 describe("deleting an account", () => {
   it("removes the owner, their bookings and documents, and nobody else's", async () => {
     const gone = await newOwner("leaving");

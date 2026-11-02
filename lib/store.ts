@@ -114,6 +114,10 @@ export function summarizePlatformBookings(filter: PlatformBookingFilter, today: 
   return backend().summarizePlatformBookings(filter, today, nowMs);
 }
 
+export function countBookingsByOwner() {
+  return backend().countBookingsByOwner();
+}
+
 /** Looks a booking up by its confirmation-link token, never by its short reference. */
 export async function getBookingByToken(token: string) {
   if (!/^[A-Za-z0-9_-]{32}$/.test(token)) return undefined;

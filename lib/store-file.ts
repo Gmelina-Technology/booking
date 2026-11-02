@@ -176,6 +176,12 @@ export const fileStore: StoreBackend = {
     }));
   },
 
+  async countBookingsByOwner() {
+    const counts: Record<string, number> = {};
+    for (const b of await readAll()) if (b.ownerId && b.status !== "cancelled" && !b.blocked) counts[b.ownerId] = (counts[b.ownerId] ?? 0) + 1;
+    return counts;
+  },
+
   async findBooking(by, value) {
     return (await readAll()).find((b) => b[by] === value);
   },

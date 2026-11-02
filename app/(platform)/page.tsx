@@ -1,17 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getActiveActivities } from "@/lib/activities";
-import { getHeroSettings } from "@/lib/banner";
 import { platform } from "@/lib/facility";
-import { getListedOwners, ownerPath, type PublicOwner } from "@/lib/owners";
+import { getListedOwners, ownerPath } from "@/lib/owners";
+import { popularVenues } from "@/lib/venues";
 import { CalendarMock, ChatMock, LegendChips, PhoneMock, StatusChip, type MockStatus } from "./showcase";
-import VenueList, { type Venue } from "./venue-list";
+import VenueCard from "./venue-card";
 
-// The home page sells to facility owners; players find venues through the list further down.
+// The home page sells to facility owners; players see the most-booked venues further down and find the rest at /venues.
 export const metadata: Metadata = {
   title: { absolute: `${platform.name} — Online booking for courts and sports halls` },
   description: "Your own booking page and one calendar for every court. No monthly fees, and nothing to pay on quiet days.",
 };
+
+/** How many of the most-booked venues the home page shows. */
+const TOP_VENUES = 3;
 
 /** Show "Already taking bookings at N venues" once N is at least this. */
 const VENUE_COUNT_MIN = 3;
@@ -64,25 +66,9 @@ const faqs: [string, React.ReactNode][] = [
   ["What does it look like to customers?", "Pick a banner template, add your photos and past events, and your page is ready to share."],
 ];
 
-/** What a venue card shows: the profile, the first banner photo and the bookable activities. */
-async function toVenue(o: PublicOwner): Promise<Venue> {
-  const [hero, activities] = await Promise.all([getHeroSettings(o.id), getActiveActivities(o.id)]);
-  return {
-    id: o.id,
-    name: o.profile.name,
-    handle: o.handle,
-    href: ownerPath(o.handle),
-    tagline: o.profile.tagline,
-    address: o.profile.address,
-    cover: hero.images[0] && `/uploads/${hero.images[0]}`,
-    activities: activities.map((a) => `${a.emoji} ${a.name}`.trim()),
-  };
-}
-
 export default async function PlatformHome() {
-  const owners = await getListedOwners();
+  const [owners, venues] = await Promise.all([getListedOwners(), popularVenues(TOP_VENUES)]);
   const sample = platform.sampleHandle ? owners.find((o) => o.handle === platform.sampleHandle) : undefined;
-  const venues = await Promise.all(owners.map(toVenue));
 
   return (
     <>
@@ -228,9 +214,22 @@ export default async function PlatformHome() {
       {owners.length > 0 && (
         <section id="businesses" className="scroll-mt-16 border-y border-black/5 bg-white">
           <div className="mx-auto max-w-6xl px-4 py-12 sm:py-16">
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Find a venue</h2>
-            <p className="mt-2 text-black/60">Book a court at a venue already taking bookings on {platform.name}.</p>
-            <VenueList venues={venues} />
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Popular venues</h2>
+                <p className="mt-2 text-black/60">The most-booked courts on {platform.name} right now.</p>
+              </div>
+              <Link href="/venues" className="font-semibold text-emerald-700 hover:underline">
+                {owners.length > venues.length ? `See all ${owners.length} venues` : "Find venues near you"} →
+              </Link>
+            </div>
+            <ul className="mt-6 grid gap-3 sm:mt-8 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
+              {venues.map((v) => (
+                <li key={v.id}>
+                  <VenueCard venue={v} />
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       )}
