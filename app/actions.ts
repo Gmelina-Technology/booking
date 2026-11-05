@@ -215,6 +215,8 @@ export async function cancelOwnBooking(token: string, reason: string): Promise<{
   if (!booking) return { ok: false, error: "Booking not found." };
   const now = facilityNow();
   if (booking.status === "cancelled") return { ok: false, error: "This booking is already cancelled." };
+  if (booking.closesAt && Date.parse(booking.closesAt) <= Date.now())
+    return { ok: false, error: "Registration has closed, so please contact the business to cancel." };
   if (booking.date < now.date || (booking.date === now.date && booking.startHour <= now.hour))
     return { ok: false, error: "This booking has already started. Please contact the business." };
 

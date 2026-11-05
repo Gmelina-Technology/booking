@@ -221,6 +221,48 @@ export type PastEvent = {
   sample?: boolean;
 };
 
+export type HostedEventKind = "open_play" | "workshop" | "tournament";
+
+/**
+ * An upcoming event players register for: open play, a workshop or a tournament
+ * (lib/hosted-events.ts). Managed at /app/events. While published, its courts
+ * are held by blocked bookings, and each registration is a booking with `eventId`.
+ */
+export type HostedEvent = {
+  id: string;
+  kind: HostedEventKind;
+  title: string;
+  activitySlug: string;
+  description: string;
+  /** File name in the uploads store, or null for the activity's card colour. */
+  photo: string | null;
+  /** "YYYY-MM-DD" */
+  date: string;
+  /** Minutes after midnight, on the half hour, within the activity's opening hours. */
+  startMinute: number;
+  endMinute: number;
+  /** The activity's courts held for the event. */
+  resourceIds: string[];
+  /** Players for open play and workshops, teams for tournaments. */
+  capacity: number;
+  /** Most spots one registration can take. Tournaments: 1 (a team). */
+  maxSpotsPerRegistration: number;
+  /** Tournaments only: players per team. The captain names each one. */
+  teamSize?: number;
+  /** Per player, or per team for tournaments. 0 is free. */
+  price: number;
+  /** "online": pay in full by QR, confirmed when staff verify it. "venue": confirmed on registering, paid at the door. */
+  payment: "online" | "venue";
+  /** Registration closes this many hours before the start. */
+  closeHoursBefore: number;
+  /** draft: staff only, holds nothing. published: listed, courts held, taking registrations. */
+  status: "draft" | "published" | "cancelled";
+  cancelledAt?: string;
+  cancelReason?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 /** A photo in the home page banner collage. */
 export type BannerMoment = { src: string; caption: string; detail: string };
 

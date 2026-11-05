@@ -334,7 +334,8 @@ reason, which the partner sees:
 | `/` | Platform landing page and the directory of businesses |
 | `/signup` | Create an owner account and booking page |
 | `/pricing` | How the partnership works (no monthly fees), without stating the rate |
-| `/p/@[handle]` | A business's page: its activities and recent events showcase |
+| `/p/@[handle]` | A business's page: its activities, upcoming events and recent events showcase |
+| `/p/@[handle]/events/[id]` | An upcoming event (open play, workshop or tournament): details, spots left and the register form |
 | `/p/@[handle]/activities/[slug]` | Booking flow: date → court → time (1–N consecutive hours) → details |
 | `/bookings/[token]` | Private confirmation page. The URL holds a 32-character random token, so it can't be guessed from the short booking reference. Email and phone are masked. |
 | `/login` | Owner sign-in |
@@ -352,7 +353,8 @@ reason, which the partner sees:
 | `/app/settings` | Payments & alerts: downpayment %, payment QR, account details, staff alert email, test email |
 | `/app/billing` | The partner's fee rate and monthly statement |
 | `/app/activities` | Staff view: add, edit, reorder, hide or delete activities |
-| `/app/events` | Staff view: past events (with photos) shown on the business page |
+| `/app/events` | Staff view: upcoming events players register for, and past events (with photos) shown on the business page |
+| `/app/events/hosted/[id]` | One upcoming event: its registrations (roster), publish, edit, duplicate, cancel |
 | `/app/banner` | Page design: the business page banner's template, text, photos, colours and buttons, with a live preview |
 | `/admin` | Platform admins only: the platform admin area (opens Partners). Partners who open it are sent to `/app` |
 | `/admin/partners` | Platform admins only: every partner with their activity and setup, search and filters, **View as**, and the admin activity log |
@@ -394,7 +396,31 @@ A few rules protect existing bookings:
 `defaultActivities` in `lib/facility.ts` is only the starting set for each new account, used until
 the owner saves their first change.
 
-Each business page has a **Recent events** section showing tournaments, clinics and private events the
+### Bookable events
+
+Partners can host **open play, workshops and tournaments** that players register for, at
+`/app/events` → **Create event** (`lib/hosted-event-ops.ts`, spec in
+[`docs/specs/2026-11-05-bookable-events-mvp.md`](docs/specs/2026-11-05-bookable-events-mvp.md)).
+
+- An event has a date, a start and end on the half hour, the courts it uses, a number of spots
+  (players, or teams for tournaments), a price per player or per team, and when registration closes.
+- **Drafts** hold nothing. **Publishing** holds the chosen courts for every whole hour the event touches
+  (7:30–9:00 PM holds 7–9 PM) with blocked bookings tagged with the event, so court bookings can't
+  overlap it. Publishing fails, and holds nothing, if any of those court-hours are booked.
+- Players register on `/p/@<handle>/events/<id>`. With **online** payment they get the payment QR at
+  once and are confirmed when staff verify the payment (no approval step); unpaid spots are released
+  after the payment window or when registration closes, whichever is first. With **pay at the venue**
+  they're confirmed straight away. Tournament captains register a team name and every player.
+- Each registration is a booking with `eventId` (and its own `reg-…` resource, so it never clashes on a
+  court). It pays the flat booking fee once, and gets the usual booking page, emails, payment
+  reference, hold release, notifications, sales and fee statement.
+- The spot count is checked atomically (a per-event advisory lock in Postgres, the write queue in the
+  JSON store), so two people can't both get the last spot.
+- Once anyone has registered, the date, time, courts, price and payment can't change, and the spots
+  can't drop below those taken. **Cancel event** cancels every registration, emails each registrant
+  (refunds are up to the partner) and frees the courts.
+
+Each business page has a **Recent events** section showing tournaments, workshops and private events the
 facility has hosted. Staff manage these at `/app/events`, with a photo, date, activity, short
 write-up and number of players. The section hides itself when there are no published events.
 Photos are shrunk in the browser (at most 1600px, about 900 KB) before upload. They are stored in

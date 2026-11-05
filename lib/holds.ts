@@ -28,6 +28,7 @@ import { facilityNow } from "./time";
 //   - once a day for every business (app/api/cron/release-holds, vercel.json)
 
 export const UNPAID_REASON = "The payment window passed without a payment.";
+export const CLOSED_REASON = "Registration closed before a payment came in.";
 export const UNREVIEWED_REASON = "We couldn't confirm this slot in time, so it was released. Please pick another time, or contact us to book.";
 
 type Windows = Pick<PaymentSettings, "paymentWindowHours" | "requestWindowHours">;
@@ -42,8 +43,11 @@ function hasStarted(b: Pick<Booking, "date" | "startHour">, now: number) {
 export function expiryReason(b: Booking, windows: Windows, now = Date.now()): string | null {
   if (b.staffCreated) return null;
   if (b.status === "awaiting_payment") {
-    const overdue = !b.paymentRef && !!b.approvedAt && Date.parse(b.approvedAt) <= now - windows.paymentWindowHours * 3600_000;
-    return overdue ? UNPAID_REASON : null;
+    if (b.paymentRef) return null;
+    const overdue = !!b.approvedAt && Date.parse(b.approvedAt) <= now - windows.paymentWindowHours * 3600_000;
+    // An event registration also has to be paid by the time registration closes.
+    const closed = !!b.closesAt && Date.parse(b.closesAt) <= now;
+    return overdue ? UNPAID_REASON : closed ? CLOSED_REASON : null;
   }
   if (b.status === "pending") {
     const stale = Date.parse(b.createdAt) <= now - windows.requestWindowHours * 3600_000;

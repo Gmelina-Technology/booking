@@ -14,7 +14,7 @@ export default function NewEventPage() {
     <div className="mx-auto max-w-6xl px-4 py-10">
       <PageBanners />
       <Link href="/app/events" className="text-sm text-black/60 hover:underline">
-        ← Past events
+        ← Events
       </Link>
       <h1 className="mt-2 mb-6 text-3xl font-bold tracking-tight">Add a past event</h1>
       <Suspense fallback={<div className="h-96 animate-pulse rounded-2xl bg-black/5" />}>

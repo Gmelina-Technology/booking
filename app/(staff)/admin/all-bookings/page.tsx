@@ -3,7 +3,8 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
 import { currentViewingAs, requirePlatformAdmin } from "@/lib/auth";
-import { formatHourRange, formatMoney, type Activity } from "@/lib/facility";
+import { bookingPlace, bookingTime } from "@/lib/event-schedule";
+import { formatMoney, type Activity } from "@/lib/facility";
 import { parsePage } from "@/lib/paging";
 import { hoursWaiting, isStale, STALE_HOURS } from "@/lib/platform-stats";
 import { listOwners, pagePlatformBookings, summarizePlatformBookings, type BookingStatus } from "@/lib/store";
@@ -265,7 +266,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<SearchParams> 
                   {shown.rows.map((b) => {
                     const owner = ownerById.get(b.ownerId);
                     const activity = activities.get(b.ownerId)?.find((a) => a.slug === b.activitySlug);
-                    const court = activity?.resources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId;
+                    const court = bookingPlace(b, activity);
                     const stale = isStale(b);
                     const open = `/app/bookings?booking=${b.id}`;
                     return (
@@ -273,7 +274,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<SearchParams> 
                         <td className="px-4 py-3 font-mono text-xs">{b.id}</td>
                         <td className="whitespace-nowrap px-4 py-3">
                           {formatDate(b.date, { weekday: "short", month: "short", year: b.date.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric" })}
-                          <span className="block text-xs text-black/50">{formatHourRange(b.startHour, b.hours)}</span>
+                          <span className="block text-xs text-black/50">{bookingTime(b)}</span>
                         </td>
                         <td className="px-4 py-3">
                           {owner ? (

@@ -3,7 +3,8 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
 import { currentViewingAs, requireOwner } from "@/lib/auth";
-import { formatHourRange, formatMoney } from "@/lib/facility";
+import { bookingTime } from "@/lib/event-schedule";
+import { formatMoney } from "@/lib/facility";
 import { describePartnerRate, describeRate } from "@/lib/fee-text";
 import { isHourly, monthlyStatement, nextRateChange, resolveRate } from "@/lib/fees";
 import { listBookings, readFeeSchedule } from "@/lib/store";
@@ -130,7 +131,7 @@ async function Billing({ searchParams }: { searchParams: Promise<Record<string, 
                   <tr key={b.id}>
                     <td className="whitespace-nowrap px-4 py-3">
                       {formatDate(b.date)}
-                      <span className="block text-xs text-black/50">{formatHourRange(b.startHour, b.hours)}</span>
+                      <span className="block text-xs text-black/50">{bookingTime(b)}</span>
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs">{b.id}</span>

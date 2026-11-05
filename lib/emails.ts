@@ -1,4 +1,5 @@
-import { formatHourRange, formatMoney, platform, type Activity, type BusinessProfile, type PaymentSettings } from "./facility";
+import { bookingPlace, bookingTime, isRegistration } from "./event-schedule";
+import { formatMoney, platform, type Activity, type BusinessProfile, type PaymentSettings } from "./facility";
 import type { Mail, MailImage } from "./mailer";
 import type { Booking, Owner } from "./store";
 import { formatDate } from "./time";
@@ -9,14 +10,22 @@ export function esc(s: string) {
 
 type Ctx = { booking: Booking; activity?: Activity; link: string; business: BusinessProfile };
 
+/** Who a registration is for: the team and its players, or how many spots. */
+function registrant(booking: Booking): string[][] {
+  if (booking.teamName) return [["Team", booking.teamName], ["Players", (booking.teamPlayers ?? []).join(", ")]];
+  return [["Spots", String(booking.spots ?? 1)]];
+}
+
 function details({ booking, activity }: Ctx) {
-  const court = activity?.resources.find((r) => r.id === booking.resourceId)?.name ?? booking.resourceId;
+  const registration = isRegistration(booking);
   return [
     ["Reference", booking.id],
-    ["Activity", `${activity?.name ?? booking.activitySlug} · ${court}`],
+    ...(registration
+      ? [["Event", booking.eventTitle ?? "Event"], ["Activity", activity?.name ?? booking.activitySlug]]
+      : [["Activity", `${activity?.name ?? booking.activitySlug} · ${bookingPlace(booking, activity)}`]]),
     ["Date", formatDate(booking.date, { weekday: "long", month: "long", year: "numeric" })],
-    ["Time", formatHourRange(booking.startHour, booking.hours)],
-    ["Players", String(booking.players)],
+    ["Time", bookingTime(booking)],
+    ...(registration ? registrant(booking) : [["Players", String(booking.players)]]),
     ...(booking.bookingFee
       ? [
           ["Price", formatMoney(booking.total - booking.bookingFee)],
@@ -73,15 +82,22 @@ export function paymentRequestEmail(ctx: Ctx, settings: PaymentSettings, qr: Mai
   const due = booking.downpayment ?? booking.total;
   const balance = booking.total - due;
   const account = [settings.accountName, settings.accountNumber].filter(Boolean).join(" · ");
-  const extra = [["Downpayment due", formatMoney(due)], ...(balance > 0 ? [["Balance at the front desk", formatMoney(balance)]] : [])];
+  const registration = isRegistration(booking);
+  const extra = [[registration ? "Amount due" : "Downpayment due", formatMoney(due)], ...(balance > 0 ? [["Balance at the front desk", formatMoney(balance)]] : [])];
+  const deadline = `within <strong>${settings.paymentWindowHours} hours</strong>${registration ? " and before registration closes" : ""}`;
 
   const html = layout(
     ctx.business,
-    "Your booking is approved, please pay the downpayment",
+    registration ? "You're registered, please pay to keep your spot" : "Your booking is approved, please pay the downpayment",
     "#047857",
     `<p>Hi ${esc(booking.name)},</p>
-<p>Good news: we've approved your booking. To lock in your slot, please pay the downpayment of
-<strong>${esc(formatMoney(due))}</strong> within <strong>${settings.paymentWindowHours} hours</strong>.</p>
+${
+  registration
+    ? `<p>Thanks for registering for <strong>${esc(booking.eventTitle ?? "our event")}</strong>. To keep your spot, please pay
+<strong>${esc(formatMoney(due))}</strong> ${deadline}.</p>`
+    : `<p>Good news: we've approved your booking. To lock in your slot, please pay the downpayment of
+<strong>${esc(formatMoney(due))}</strong> ${deadline}.</p>`
+}
 ${detailsHtml(ctx, extra)}
 <h3 style="margin:28px 0 8px;font-size:16px">Pay with ${esc(settings.methodName)}</h3>
 ${qr ? `<p style="text-align:center;margin:12px 0"><img src="cid:${qr.cid}" alt="${esc(settings.methodName)} payment QR code" width="240" style="width:240px;max-width:100%;border-radius:12px;border:1px solid #e5e7eb"></p>` : ""}
@@ -89,12 +105,16 @@ ${account ? `<p style="text-align:center;margin:4px 0;font-weight:600">${esc(acc
 <p style="color:#374151">${esc(settings.instructions)}</p>
 <p style="color:#374151">Please put <strong>${esc(booking.id)}</strong> in the payment note so we can match it to your booking.</p>
 ${button(ctx.link, "Enter your payment reference")}
-<p style="font-size:13px;color:#6b7280">If we don't receive the downpayment in time, the slot may be released to other players.</p>`,
+<p style="font-size:13px;color:#6b7280">If we don't receive the ${registration ? "payment in time, your spot" : "downpayment in time, the slot"} may be released to other players.</p>`,
   );
 
   const text = `Hi ${booking.name},
 
-We've approved your booking. Please pay the downpayment of ${formatMoney(due)} within ${settings.paymentWindowHours} hours to lock in your slot.
+${
+  registration
+    ? `Thanks for registering for ${booking.eventTitle ?? "our event"}. Please pay ${formatMoney(due)} within ${settings.paymentWindowHours} hours and before registration closes to keep your spot.`
+    : `We've approved your booking. Please pay the downpayment of ${formatMoney(due)} within ${settings.paymentWindowHours} hours to lock in your slot.`
+}
 
 ${detailsText(ctx, extra)}
 
@@ -108,7 +128,7 @@ Enter your payment reference here: ${ctx.link}
   return {
     to: booking.email,
     replyTo: ctx.business.email || undefined,
-    subject: `Pay your downpayment to confirm booking ${booking.id}`,
+    subject: registration ? `Pay to keep your spot: ${booking.eventTitle ?? booking.id}` : `Pay your downpayment to confirm booking ${booking.id}`,
     html,
     text,
     images: qr ? [qr] : [],
@@ -120,11 +140,14 @@ export function confirmedEmail(ctx: Ctx): Mail {
   const { booking } = ctx;
   const paid = booking.downpayment ?? 0;
   const balance = booking.total - paid;
+  const registration = isRegistration(booking);
+  const paidWhat = registration ? "payment" : "downpayment";
+  const what = registration ? "spot" : "booking";
   const extra = [
-    ...(paid > 0 ? [["Downpayment received", formatMoney(paid)]] : []),
+    ...(paid > 0 ? [[registration ? "Payment received" : "Downpayment received", formatMoney(paid)]] : []),
     ...(balance > 0 ? [[paid > 0 ? "Balance at the front desk" : "Pay at the front desk", formatMoney(balance)]] : []),
   ];
-  const intro = paid > 0 ? "We've received your downpayment and your booking is confirmed." : "Your booking is confirmed.";
+  const intro = paid > 0 ? `We've received your ${paidWhat} and your ${what} is confirmed.` : `Your ${what} is confirmed.`;
   return {
     to: booking.email,
     replyTo: ctx.business.email || undefined,
@@ -260,8 +283,7 @@ Enter your payment reference: ${ctx.link}
 /** Alert to staff when holds were released automatically, so a missed request doesn't go unnoticed. */
 export function staffReleasedEmail(contexts: Ctx[], to: string, adminLink: string): Mail {
   const lines = contexts.map(({ booking, activity }) => {
-    const court = activity?.resources.find((r) => r.id === booking.resourceId)?.name ?? booking.resourceId;
-    const slot = `${activity?.name ?? booking.activitySlug} · ${court} · ${formatDate(booking.date)} · ${formatHourRange(booking.startHour, booking.hours)}`;
+    const slot = `${activity?.name ?? booking.activitySlug} · ${bookingPlace(booking, activity)} · ${formatDate(booking.date)} · ${bookingTime(booking)}`;
     return { booking, slot };
   });
   const business = contexts[0].business;
@@ -452,5 +474,57 @@ export function accountNoticeEmail(to: string, heading: string, message: string)
       `<p>${esc(message)}</p><p>If this wasn't you, reset your password from the sign-in page right away, or reply to this email.</p>`,
     ),
     text: `${heading}\n\n${message}\n\nIf this wasn't you, reset your password from the sign-in page right away, or reply to this email.\n`,
+  };
+}
+
+/** Sent to each registrant when the business cancels a hosted event. */
+export function eventCancelledEmail(ctx: Ctx): Mail {
+  const { booking } = ctx;
+  const reason = booking.cancelReason?.trim();
+  const title = booking.eventTitle ?? "The event";
+  return {
+    to: booking.email,
+    replyTo: ctx.business.email || undefined,
+    subject: `Cancelled: ${title}`,
+    html: layout(
+      ctx.business,
+      `${title} is cancelled`,
+      "#52525b",
+      `<p>Hi ${esc(booking.name)},</p>
+<p>We're sorry: we've had to cancel <strong>${esc(title)}</strong>.${reason ? ` Reason: <em>${esc(reason)}</em>` : ""}</p>
+${detailsHtml(ctx)}
+<p>If you've already paid, contact us at ${esc(contact(ctx.business))} about a refund and mention reference <strong>${esc(booking.id)}</strong>.</p>`,
+    ),
+    text: `Hi ${booking.name},
+
+We're sorry: we've had to cancel ${title}.${reason ? ` Reason: ${reason}` : ""}
+
+${detailsText(ctx)}
+
+If you've already paid, contact ${contact(ctx.business)} about a refund with reference ${booking.id}.
+`,
+  };
+}
+
+/** Alert to staff when someone registers for a hosted event. */
+export function staffNewRegistrationEmail(ctx: Ctx, to: string, adminLink: string): Mail {
+  const { booking } = ctx;
+  const extra = [
+    ["Name", booking.name],
+    ["Email", booking.email],
+    ["Phone", booking.phone],
+    ...(booking.notes ? [["Notes", booking.notes]] : []),
+  ];
+  const waiting = booking.status === "awaiting_payment" ? " They've been sent the payment QR; confirm once you see the payment." : "";
+  return {
+    to,
+    subject: `New registration ${booking.id}: ${booking.eventTitle ?? "event"}, ${booking.date}`,
+    html: layout(
+      ctx.business,
+      "New event registration",
+      "#1d4ed8",
+      `<p>${esc(booking.teamName || booking.name)} registered.${esc(waiting)}</p>${detailsHtml(ctx, extra)}${button(adminLink, "Open the roster")}`,
+    ),
+    text: `${booking.teamName || booking.name} registered.${waiting}\n\n${detailsText(ctx, extra)}\n\nRoster: ${adminLink}\n`,
   };
 }
