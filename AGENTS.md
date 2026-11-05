@@ -7,3 +7,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Marketing feature log
+
+Every PR that ships a customer-visible feature adds an entry to the top of
+[`docs/marketing/FEATURES.md`](docs/marketing/FEATURES.md) with its shipped date and
+`Published: —`. Format and rules: [`docs/marketing/README.md`](docs/marketing/README.md).
