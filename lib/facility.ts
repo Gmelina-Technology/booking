@@ -61,13 +61,13 @@ export const platform = {
   /** The longest booking window a business can set. */
   maxBookingWindowDays: 180,
   /** Who runs the site, shown in the privacy notice and terms (/privacy, /terms). Set both before launch. */
-  operator: "CourtHub",
+  operator: "GmelinaTech",
   /** Where people send privacy requests (Data Privacy Act). */
-  privacyEmail: "privacy@your-domain.com",
+  privacyEmail: "info@gmelinatech.com",
   /** Where owners can ask questions, linked as "Contact" in the footer. Empty hides the link. */
-  supportEmail: "",
+  supportEmail: "support@gmelinatech.com",
   /** Date the privacy notice and terms last changed, shown on those pages. */
-  legalUpdated: "2026-10-29",
+  legalUpdated: "2026-11-06",
   /** Handle of a business whose page the home page offers as a sample (e.g. a demo account). Empty hides the link. */
   sampleHandle: "",
 };
