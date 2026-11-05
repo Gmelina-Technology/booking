@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { requireOwner } from "@/lib/auth";
 import { platform } from "@/lib/facility";
 import { isPaused, ownerPath } from "@/lib/owners";
+import { qrPath } from "@/lib/qr";
 import { holdsSlot, listBookings, type PagePause } from "@/lib/store";
 import { addDays, facilityNow, formatDate } from "@/lib/time";
 import { ShareButtons } from "@/app/p/[handle]/share";
@@ -69,6 +70,7 @@ async function Business({ searchParams }: { searchParams: Promise<Record<string,
           <div className="mt-3">
             <ShareButtons path={path} text={`Book a court at ${owner.profile.name}`} />
           </div>
+          <QrCode path={path} handle={owner.handle} name={owner.profile.name} />
           <p className="mt-4 text-xs font-medium text-black/50">How the link looks when shared</p>
           {/* eslint-disable-next-line @next/next/no-img-element -- generated preview card, already sized */}
           <img
@@ -97,6 +99,38 @@ async function Business({ searchParams }: { searchParams: Promise<Record<string,
       <PauseForm pause={pause} min={addDays(today, 1)} max={addDays(today, 365)} upcoming={upcoming} />
 
       <BusinessForm profile={owner.profile} />
+    </div>
+  );
+}
+
+/** The page's QR code with downloads, for posters, flyers and the front desk. */
+function QrCode({ path, handle, name }: { path: string; handle: string; name: string }) {
+  const link = "rounded-lg border border-black/10 px-3 py-2 text-sm font-medium hover:bg-black/5";
+  return (
+    <div className="mt-5 flex flex-wrap items-start gap-5 rounded-xl bg-black/[0.02] p-4">
+      {/* eslint-disable-next-line @next/next/no-img-element -- generated SVG, already square */}
+      <img src={`${path}/qr`} alt={`QR code for ${name}`} width={144} height={144} className="size-36 shrink-0 rounded-lg border border-black/10 bg-white" />
+      <div className="min-w-60 flex-1">
+        <h3 className="text-sm font-semibold">QR code</h3>
+        <p className="mt-1 text-sm text-black/60">
+          Scanning it opens your booking page. Print it for your front desk, courts or flyers. It points to the short link{" "}
+          <code className="rounded bg-black/5 px-1">{qrPath(handle)}</code>, so codes you&apos;ve printed keep working.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a href={`${path}/poster?download`} download className={link}>
+            Download poster
+          </a>
+          <a href={`${path}/qr?format=png&download`} download className={link}>
+            PNG
+          </a>
+          <a href={`${path}/qr?download`} download className={link}>
+            SVG (for printers)
+          </a>
+          <a href={`${path}/poster`} target="_blank" className="px-1 py-2 text-sm font-semibold text-emerald-700 hover:underline">
+            Preview poster ↗
+          </a>
+        </div>
+      </div>
     </div>
   );
 }

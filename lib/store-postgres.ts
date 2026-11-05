@@ -66,6 +66,7 @@ END $$;
 DROP INDEX IF EXISTS bookings_date_idx;
 CREATE INDEX IF NOT EXISTS bookings_owner_date_idx ON bookings (owner_id, date, start_hour);
 CREATE INDEX IF NOT EXISTS bookings_platform_date_idx ON bookings (date, start_hour);
+CREATE INDEX IF NOT EXISTS bookings_event_idx ON bookings ((data->>'eventId')) WHERE data ? 'eventId';
 
 CREATE TABLE IF NOT EXISTS documents (
   key   text PRIMARY KEY,
@@ -352,6 +353,44 @@ export const postgresStore: StoreBackend = {
       if ((err as { code?: string }).code === EXCLUSION_VIOLATION) return false;
       throw err;
     }
+  },
+
+  async insertBookings(bookings) {
+    const q = await db();
+    try {
+      await q.begin(async (tx) => {
+        for (const booking of bookings) {
+          const c = columns(booking);
+          await tx`
+            INSERT INTO bookings (id, owner_id, access_token, activity_slug, resource_id, date, start_hour, hours, status, created_at, data)
+            VALUES (${c.id}, ${c.owner_id}, ${c.access_token}, ${c.activity_slug}, ${c.resource_id}, ${c.date}, ${c.start_hour},
+                    ${c.hours}, ${c.status}, ${c.created_at}, ${tx.json(c.data)})`;
+        }
+      });
+      return true;
+    } catch (err) {
+      if ((err as { code?: string }).code === EXCLUSION_VIOLATION) return false;
+      throw err;
+    }
+  },
+
+  async insertRegistration(booking, capacity) {
+    const q = await db();
+    const c = columns(booking);
+    return (await q.begin(async (tx) => {
+      // One registration per event at a time, so the count below can't go stale before the insert.
+      await tx`SELECT pg_advisory_xact_lock(hashtext(${`event:${booking.eventId}`}))`;
+      const [{ taken }] = await tx<{ taken: number }[]>`
+        SELECT coalesce(sum(coalesce((data->>'spots')::int, 1)), 0)::int AS taken FROM bookings
+        WHERE owner_id = ${c.owner_id} AND data->>'eventId' = ${booking.eventId!} AND status <> 'cancelled'
+          AND NOT coalesce((data->>'blocked')::boolean, false)`;
+      if (taken + (booking.spots ?? 1) > capacity) return "full";
+      await tx`
+        INSERT INTO bookings (id, owner_id, access_token, activity_slug, resource_id, date, start_hour, hours, status, created_at, data)
+        VALUES (${c.id}, ${c.owner_id}, ${c.access_token}, ${c.activity_slug}, ${c.resource_id}, ${c.date}, ${c.start_hour},
+                ${c.hours}, ${c.status}, ${c.created_at}, ${tx.json(c.data)})`;
+      return "ok";
+    })) as "ok" | "full";
   },
 
   async updateBooking(id, change) {

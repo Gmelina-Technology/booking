@@ -4,7 +4,8 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
-import { formatHourRange, formatMoney } from "@/lib/facility";
+import { bookingTime } from "@/lib/event-schedule";
+import { formatMoney } from "@/lib/facility";
 import { bookingFee } from "@/lib/fees";
 import { releaseOverdueHolds } from "@/lib/holds";
 import { firstMonths, growth, isSale, monthSales, revenueOf } from "@/lib/sales";
@@ -95,7 +96,7 @@ async function Overview({ searchParams }: { searchParams: Promise<Record<string,
           href={staffHref(calendar, today, { mode: "day" })}
           label="Today’s bookings"
           value={String(todays.length)}
-          note={next ? `Next: ${formatHourRange(next.startHour, next.hours)}` : "Nothing else today"}
+          note={next ? `Next: ${bookingTime(next)}` : "Nothing else today"}
         />
         <StatCard
           href={staffHref(calendar, today, { mode: "week" })}
@@ -129,7 +130,7 @@ async function Overview({ searchParams }: { searchParams: Promise<Record<string,
                         <StatusBadge status={b.status} blocked={b.blocked} />
                       </p>
                       <p className="truncate text-xs text-black/50">
-                        {formatDate(b.date)} · {formatHourRange(b.startHour, b.hours)} · <Court b={b} activity={activityBySlug.get(b.activitySlug)} />
+                        {formatDate(b.date)} · {bookingTime(b)} · <Court b={b} activity={activityBySlug.get(b.activitySlug)} />
                       </p>
                     </div>
                     <BookingActions b={b} today={today} noDownpayment={!!activityBySlug.get(b.activitySlug)?.noDownpayment} fee={fee} />
@@ -159,7 +160,7 @@ async function Overview({ searchParams }: { searchParams: Promise<Record<string,
               {todays.map((b) => (
                 <li key={b.id}>
                   <Link href={openHref(b)} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-black/[0.02]">
-                    <span className="w-20 shrink-0 font-mono sm:w-36 sm:whitespace-nowrap text-xs text-black/60">{formatHourRange(b.startHour, b.hours)}</span>
+                    <span className="w-20 shrink-0 font-mono sm:w-36 sm:whitespace-nowrap text-xs text-black/60">{bookingTime(b)}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium">{b.name}</span>
                       <span className="block truncate text-xs text-black/50">

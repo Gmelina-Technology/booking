@@ -3,7 +3,8 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
-import { formatHourRange, formatMoney, platform, type Activity } from "@/lib/facility";
+import { bookingPlace, bookingTime } from "@/lib/event-schedule";
+import { formatMoney, platform, type Activity } from "@/lib/facility";
 import { releaseOverdueHolds } from "@/lib/holds";
 import { bookingFee } from "@/lib/fees";
 import { isSale, revenueOf } from "@/lib/sales";
@@ -155,7 +156,7 @@ function CalendarView({
   const activityName = new Map(activities.map((a) => [a.slug, a]));
   const courtName = (b: Booking) => {
     const a = activityName.get(b.activitySlug);
-    return `${a?.name ?? b.activitySlug} · ${a?.resources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId}`;
+    return `${a?.name ?? b.activitySlug} · ${bookingPlace(b, a)}`;
   };
 
   // Courts for the day timeline: the chosen space, or every space that's open or has a booking that day.
@@ -442,10 +443,18 @@ function BookingPanel({ closeHref, forms, nowHour, ...props }: RowProps & { clos
           </Link>
         </div>
         <BookingCard {...props} />
-        {!b.erasedAt && (
+        {b.eventId ? (
           <div className="mx-4 mb-4">
-            <EditBooking b={b} activities={forms} today={props.today} nowHour={nowHour} />
+            <Link href={`/app/events/hosted/${b.eventId}`} className="text-sm font-medium text-emerald-700 hover:underline">
+              {b.blocked ? "Held for" : "Registration for"} {b.eventTitle ?? "an event"} →
+            </Link>
           </div>
+        ) : (
+          !b.erasedAt && (
+            <div className="mx-4 mb-4">
+              <EditBooking b={b} activities={forms} today={props.today} nowHour={nowHour} />
+            </div>
+          )
         )}
         {b.paymentRef && (
           <div className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
@@ -544,7 +553,7 @@ function BookingRow({ b, activity, showDate, today, overdueHours, fee }: RowProp
       </td>
       <td className="whitespace-nowrap px-3 py-3 font-medium">
         {showDate && <p>{formatDate(b.date)}</p>}
-        <p className={showDate ? "text-xs font-normal text-black/60" : ""}>{formatHourRange(b.startHour, b.hours)}</p>
+        <p className={showDate ? "text-xs font-normal text-black/60" : ""}>{bookingTime(b)}</p>
       </td>
       <td className="px-3 py-3">
         <Court b={b} activity={activity} />
@@ -573,7 +582,7 @@ function BookingCard({ b, activity, showDate, today, overdueHours, fee }: RowPro
         <div className="min-w-0">
           <p className="font-medium">
             {showDate && <>{formatDate(b.date)} · </>}
-            {formatHourRange(b.startHour, b.hours)}
+            {bookingTime(b)}
           </p>
           <p className="truncate">
             <Court b={b} activity={activity} />
@@ -593,10 +602,9 @@ function BookingCard({ b, activity, showDate, today, overdueHours, fee }: RowPro
 }
 
 export function Court({ b, activity }: { b: Booking; activity?: Activity }) {
-  const resource = activity?.resources.find((r) => r.id === b.resourceId);
   return (
     <>
-      {activity?.name ?? b.activitySlug} <span className="whitespace-nowrap text-black/50">· {resource?.name ?? b.resourceId}</span>
+      {activity?.name ?? b.activitySlug} <span className="whitespace-nowrap text-black/50">· {bookingPlace(b, activity)}</span>
     </>
   );
 }

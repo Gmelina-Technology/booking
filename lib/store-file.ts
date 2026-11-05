@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { spotsTaken } from "./event-schedule";
 import { byOwner, partnerStats, waitingSince } from "./platform-stats";
 import {
   SlotTaken,
@@ -192,6 +193,24 @@ export const fileStore: StoreBackend = {
       if (all.some((b) => clashes(b, booking))) return false;
       await writeAll([...all, booking]);
       return true;
+    });
+  },
+
+  insertBookings(bookings) {
+    return exclusive(async () => {
+      const all = await readAll();
+      if (bookings.some((booking) => [...all, ...bookings].some((b) => clashes(b, booking)))) return false;
+      await writeAll([...all, ...bookings]);
+      return true;
+    });
+  },
+
+  insertRegistration(booking, capacity) {
+    return exclusive(async () => {
+      const all = await readAll();
+      if (spotsTaken(all, booking.eventId!) + (booking.spots ?? 1) > capacity) return "full";
+      await writeAll([...all, booking]);
+      return "ok";
     });
   },
 

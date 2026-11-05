@@ -3,6 +3,7 @@ import {
   defaultActivities,
   defaultPaymentSettings,
   type Activity,
+  type HostedEvent,
   type PastEvent,
   type PaymentSettings,
 } from "./facility";
@@ -126,24 +127,50 @@ export async function getBookingByToken(token: string) {
 
 export type NewBooking = Omit<Booking, "id" | "status" | "createdAt">;
 
-/** Inserts a pending booking unless it overlaps an active one on the same court. */
-export async function insertBooking(input: NewBooking): Promise<Booking | null> {
+function newBooking(input: NewBooking & { status?: Booking["status"] }): Booking {
+  return {
+    status: "pending",
+    ...input,
+    id: randomBytes(4).toString("hex").toUpperCase(),
+    accessToken: randomBytes(24).toString("base64url"),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** Retries `insert` with a fresh reference when the random one already exists (a Postgres unique violation). */
+async function withFreshIds<T>(insert: () => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
-    const booking: Booking = {
-      ...input,
-      id: randomBytes(4).toString("hex").toUpperCase(),
-      accessToken: randomBytes(24).toString("base64url"),
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
     try {
-      return (await backend().insertBooking(booking)) ? booking : null;
+      return await insert();
     } catch (err) {
-      // Postgres unique violation: the random reference already exists. Try another.
       if ((err as { code?: string }).code === "23505" && attempt < 3) continue;
       throw err;
     }
   }
+}
+
+/** Inserts a pending booking unless it overlaps an active one on the same court. */
+export function insertBooking(input: NewBooking): Promise<Booking | null> {
+  return withFreshIds(async () => {
+    const booking = newBooking(input);
+    return (await backend().insertBooking(booking)) ? booking : null;
+  });
+}
+
+/** Inserts confirmed bookings all together, or none if any overlaps an active booking on its court. */
+export function insertBookings(inputs: NewBooking[]): Promise<Booking[] | null> {
+  return withFreshIds(async () => {
+    const bookings = inputs.map((input) => newBooking({ ...input, status: "confirmed" }));
+    return (await backend().insertBookings(bookings)) ? bookings : null;
+  });
+}
+
+/** Inserts a registration for a hosted event (`eventId`, `spots`) if it fits in `capacity`. */
+export function insertRegistration(input: NewBooking & { status: Booking["status"] }, capacity: number): Promise<Booking | "full"> {
+  return withFreshIds(async () => {
+    const booking = newBooking(input);
+    return (await backend().insertRegistration(booking, capacity)) === "ok" ? booking : "full";
+  });
 }
 
 class NotYours extends Error {}
@@ -227,6 +254,20 @@ export function deleteEvent(ownerId: string, id: string): Promise<PastEvent | un
     doc: all.filter((e) => e.id !== id),
     result: all.find((e) => e.id === id),
   }));
+}
+
+// ---- Hosted events --------------------------------------------------------
+
+export function readHostedEvents(ownerId: string): Promise<HostedEvent[]> {
+  return backend().readDoc<HostedEvent[]>(ownerId, "hosted-events", []);
+}
+
+/** Atomically changes the owner's hosted events. `change` may throw to abort; nothing is written then. */
+export function updateHostedEvents<R>(ownerId: string, change: (all: HostedEvent[]) => R): Promise<R> {
+  return backend().updateDoc<HostedEvent[], R>(ownerId, "hosted-events", [], (all) => {
+    const result = change(all);
+    return { doc: all, result };
+  });
 }
 
 // ---- Payment settings -----------------------------------------------------

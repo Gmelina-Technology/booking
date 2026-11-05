@@ -8,6 +8,7 @@ import { ownerFromParams, ownerPath } from "@/lib/owners";
 import Hero from "./hero";
 import PastEvents from "./past-events";
 import PausedNotice, { pausedNow } from "./paused-notice";
+import UpcomingEvents from "./upcoming-events";
 
 export default function OwnerHome({ params }: PageProps<"/p/[handle]">) {
   return (
@@ -78,6 +79,10 @@ async function OwnerHomeContent({ params }: { params: Promise<{ handle: string }
           ))}
         </div>
       </section>
+
+      <Suspense fallback={null}>
+        <UpcomingEvents owner={owner} />
+      </Suspense>
 
       <PastEvents owner={owner} />
 

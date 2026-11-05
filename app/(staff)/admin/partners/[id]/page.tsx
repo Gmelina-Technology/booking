@@ -6,7 +6,8 @@ import { getAllActivities } from "@/lib/activities";
 import { currentViewingAs, isPlatformAdmin, requirePlatformAdmin } from "@/lib/auth";
 import { describeRate } from "@/lib/fee-text";
 import { resolveRate } from "@/lib/fees";
-import { formatHourRange, formatMoney, platform } from "@/lib/facility";
+import { bookingTime } from "@/lib/event-schedule";
+import { formatMoney, platform } from "@/lib/facility";
 import { ownerPath } from "@/lib/owners";
 import { isStale, partnerStats, setupChecks, STALE_HOURS } from "@/lib/platform-stats";
 import { getOwnerById, listPlatformBookings, readFeeSchedule, readPartnerLog, readSettings, readViewAsLog } from "@/lib/store";
@@ -205,7 +206,7 @@ async function Partner({ params }: { params: Promise<{ id: string }> }) {
                     <td className="px-4 py-3 font-mono text-xs">{b.id}</td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {formatDate(b.date, { weekday: "short", month: "short" })}
-                      <span className="block text-xs text-black/50">{formatHourRange(b.startHour, b.hours)}</span>
+                      <span className="block text-xs text-black/50">{bookingTime(b)}</span>
                     </td>
                     <td className="px-4 py-3">{activityName.get(b.activitySlug)?.name ?? b.activitySlug}</td>
                     <td className="px-4 py-3">{b.name}</td>

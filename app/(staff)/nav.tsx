@@ -48,7 +48,7 @@ const partnerGroups: Group[] = [
     label: "Catalog",
     items: [
       { href: "/app/activities", label: "Activities", icon: icons.grid },
-      { href: "/app/events", label: "Past events", icon: icons.flag },
+      { href: "/app/events", label: "Events", icon: icons.flag },
     ],
   },
   {
