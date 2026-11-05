@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { socialIcons } from "./social-links";
 
 // Buttons that share a business page to Facebook, X, WhatsApp, email, or the
 // phone's own share sheet (which covers Messenger, Instagram, Viber, etc.).
-// ShareMenu is the header button on the public page; ShareButtons is the row
-// on the owner's Business profile page. The link preview they produce is
+// ShareMenu is the header button on the public page (with a QR code to scan
+// off the screen); ShareButtons is the row on the owner's Business profile page. The link preview they produce is
 // ./opengraph-image.tsx plus the Open Graph tags in ./layout.tsx.
 
 type Target = { key: string; label: string; icon: ReactNode; href: (url: string, text: string) => string };
@@ -48,6 +48,14 @@ const linkIcon = (
     strokeWidth="2"
     strokeLinecap="round"
   />
+);
+const qrIcon = (
+  <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+    <rect x="3.5" y="3.5" width="6" height="6" rx="1" />
+    <rect x="14.5" y="3.5" width="6" height="6" rx="1" />
+    <rect x="3.5" y="14.5" width="6" height="6" rx="1" />
+    <path d="M14.5 14.5h2.5v2.5M20.5 14.5v0M14.5 20.5h6v-3" strokeLinecap="round" />
+  </g>
 );
 const shareIcon = (
   <path d="M12 3v12M7.5 7.5L12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -121,6 +129,7 @@ export function ShareMenu({ path, text }: { path: string; text: string }) {
   const share = useShare(path, text);
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const qr = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -180,8 +189,52 @@ export function ShareMenu({ path, text }: { path: string; text: string }) {
             <Icon>{linkIcon}</Icon>
             <span aria-live="polite">{share.copied ? "Link copied!" : "Copy link"}</span>
           </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              qr.current?.showModal();
+            }}
+            className={item}
+          >
+            <Icon>{qrIcon}</Icon>
+            QR code
+          </button>
         </div>
       )}
+      <QrDialog ref={qr} path={path} text={text} />
     </div>
+  );
+}
+
+/** The page's QR code (./qr/route.ts) big enough to scan off this screen, e.g. a friend's phone across the table. */
+function QrDialog({ ref, path, text }: { ref: RefObject<HTMLDialogElement | null>; path: string; text: string }) {
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby="qr-dialog-title"
+      className="m-auto w-[min(22rem,calc(100vw-2rem))] rounded-2xl bg-white p-6 text-center shadow-xl backdrop:bg-black/30"
+      onClick={(e) => e.target === ref.current && ref.current.close()}
+    >
+      <h2 id="qr-dialog-title" className="text-lg font-bold">
+        Scan to open this page
+      </h2>
+      <p className="mt-1 text-sm text-black/60">{text}</p>
+      {/* eslint-disable-next-line @next/next/no-img-element -- generated SVG, already square */}
+      <img src={`${path}/qr`} alt={`QR code: ${text}`} width={256} height={256} loading="lazy" className="mx-auto mt-4 size-64" />
+      <div className="mt-4 flex justify-center gap-2">
+        <a href={`${path}/qr?format=png&download`} download className="rounded-xl border border-black/10 px-4 py-2 text-sm font-medium hover:bg-black/5">
+          Download
+        </a>
+        <button
+          type="button"
+          onClick={() => ref.current?.close()}
+          className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+        >
+          Done
+        </button>
+      </div>
+    </dialog>
   );
 }
