@@ -66,6 +66,10 @@ export default function PrivacyPage() {
           Service providers that run the site for us: web hosting and file storage (Vercel), the database (Neon) and the email service that
           delivers our emails. They may store data outside the Philippines, and they may only use it to provide their service to us.
         </li>
+        <li>
+          Map services: a facility&apos;s address is sent to OpenStreetMap Nominatim to place it on the map, and your browser loads map images
+          from OpenFreeMap when you view a map, which shares your IP address with them.
+        </li>
         <li>Authorities, when the law requires it.</li>
       </ul>
 

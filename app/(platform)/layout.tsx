@@ -65,9 +65,12 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
       <main className="flex-1">{children}</main>
       <footer className="border-t border-black/5 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap justify-between gap-4 px-4 py-8 text-sm text-black/60">
-          <p>
-            <span className="font-semibold text-black">{platform.name}</span> · {platform.tagline}
-          </p>
+          <div>
+            <p>
+              <span className="font-semibold text-black">{platform.name}</span> · {platform.tagline}
+            </p>
+            <p className="mt-1 text-xs text-black/40">Powered by Gmelina Technology</p>
+          </div>
           <p className="flex flex-wrap gap-x-4 gap-y-2">
             <Link href="/pricing" className="hover:text-black hover:underline">
               Pricing

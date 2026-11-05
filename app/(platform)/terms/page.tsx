@@ -31,6 +31,10 @@ export default function TermsPage() {
           bookings, and requests the facility doesn&apos;t review in time, are cancelled automatically and the slot is released.
         </li>
         <li>Prices, the downpayment, cancellations and refunds are set by each facility. Contact the facility about them.</li>
+        <li>
+          A booking may include a {platform.name} booking fee, shown in the price breakdown before you request. It is part of the total you
+          pay the facility.
+        </li>
         <li>Give accurate contact details, so the facility can reach you about your booking.</li>
       </ul>
 
