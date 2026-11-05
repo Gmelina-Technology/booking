@@ -172,7 +172,7 @@ export function ApproveAll({ ids, fees }: { ids: string[]; fees: number }) {
 /** What the action buttons need to know about a booking. */
 export type ActionBooking = Pick<
   Booking,
-  "id" | "status" | "email" | "date" | "startHour" | "paymentRef" | "blocked" | "balancePaidAt" | "noShowAt" | "downpayment" | "total" | "bookingFee"
+  "id" | "status" | "email" | "date" | "startHour" | "paymentRef" | "blocked" | "balancePaidAt" | "noShowAt" | "downpayment" | "total" | "bookingFee" | "eventId"
 >;
 
 /** Next-step buttons for a booking, depending on where it is in the lifecycle. */
@@ -220,7 +220,7 @@ export function BookingActions({
 
   async function markReceived() {
     const ok = await confirm(emailed ? "The customer gets a confirmation email." : "There's no email on file, so no email is sent.", {
-      title: `Mark the downpayment for ${id} as received?`,
+      title: `Mark the ${b.eventId ? "payment" : "downpayment"} for ${id} as received?`,
       confirmLabel: "Mark received",
     });
     if (ok) run(() => markDownpaymentReceived(id));
@@ -250,6 +250,14 @@ export function BookingActions({
   const started = b.date < today || (b.date === today && b.startHour <= facilityNow().hour);
   const balanceDue = status === "confirmed" && !b.blocked && !b.noShowAt && !b.balancePaidAt && b.total > 0;
 
+  // A court an event holds is changed through the event.
+  if (b.eventId && b.blocked)
+    return (
+      <a href={`/app/events/hosted/${b.eventId}`} className={secondary}>
+        Open event
+      </a>
+    );
+
   return (
     <div className="flex flex-col items-end gap-1">
       {/* Buttons wrap onto a second line rather than push a narrow table wider than the page. */}
@@ -277,7 +285,7 @@ export function BookingActions({
         {status === "awaiting_payment" && (
           <>
             <button className={primary} disabled={pending} onClick={markReceived}>
-              Downpayment received
+              {b.eventId ? "Payment received" : "Downpayment received"}
             </button>
             <MoreMenu
               disabled={pending}

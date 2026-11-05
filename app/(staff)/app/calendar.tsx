@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { formatHour, formatHourRange, type Activity } from "@/lib/facility";
+import { bookingTime } from "@/lib/event-schedule";
+import { formatHour, type Activity } from "@/lib/facility";
 import type { Booking } from "@/lib/store";
 import { addDays, formatDate, monthWeeks, startOfWeek } from "@/lib/time";
 
@@ -54,14 +55,14 @@ function Pill({ b, href }: { b: Booking; href: string }) {
     <Link
       href={href}
       scroll={false}
-      title={`${b.name} · ${formatHourRange(b.startHour, b.hours)} · ${tone.label}`}
+      title={`${b.name} · ${bookingTime(b)} · ${tone.label}`}
       className={`block rounded-md px-1.5 py-1 text-left ring-1 ring-inset ${tone.cls}`}
     >
       <span className="block truncate text-xs font-medium">
         {b.status === "pending" && "Tentative: "}
         {b.name}
       </span>
-      <span className="block truncate text-[10px] opacity-80">{formatHourRange(b.startHour, b.hours)}</span>
+      <span className="block truncate text-[10px] opacity-80">{bookingTime(b)}</span>
     </Link>
   );
 }
@@ -153,7 +154,7 @@ function Block({ b, href, top, lane = 0, of = 1, sub }: { b: Booking; href: stri
     <Link
       href={href}
       scroll={false}
-      title={`${b.name} · ${formatHourRange(b.startHour, b.hours)}${sub ? ` · ${sub}` : ""} · ${tone.label}`}
+      title={`${b.name} · ${bookingTime(b)}${sub ? ` · ${sub}` : ""} · ${tone.label}`}
       className={`absolute overflow-hidden rounded-lg px-1.5 py-1 ring-1 ring-inset ${tone.cls}`}
       style={{
         top: (b.startHour - top) * ROW + 2,
@@ -163,7 +164,7 @@ function Block({ b, href, top, lane = 0, of = 1, sub }: { b: Booking; href: stri
       }}
     >
       <span className="block truncate text-xs font-semibold">{b.name}</span>
-      <span className="block truncate text-[10px] opacity-80">{formatHourRange(b.startHour, b.hours)}</span>
+      <span className="block truncate text-[10px] opacity-80">{bookingTime(b)}</span>
       {sub && <span className="block truncate text-[10px] opacity-70">{sub}</span>}
     </Link>
   );

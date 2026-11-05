@@ -5,6 +5,7 @@ import { getActivity, getAllActivities } from "@/lib/activities";
 import { requireOwner } from "@/lib/auth";
 import { bookingEmailContext, logBookingEmail } from "@/lib/booking-mail";
 import { cancelledEmail, confirmedEmail, paymentRequestEmail, paymentRetryEmail, rescheduledEmail } from "@/lib/emails";
+import { isEventHold } from "@/lib/event-schedule";
 import { downpaymentFor, formatHourRange, paymentReady, type Activity } from "@/lib/facility";
 import { bookingFee } from "@/lib/fees";
 import { sendMail, type MailImage, type MailResult } from "@/lib/mailer";
@@ -151,6 +152,8 @@ export async function markDownpaymentReceived(id: string): Promise<StaffResult> 
   const booking = await transition(owner, id, ["awaiting_payment"], (b) => {
     b.status = "confirmed";
     b.paidAt = new Date().toISOString();
+    // Paid the whole total up front (an event registration): nothing left to collect at the venue.
+    if ((b.downpayment ?? 0) >= b.total) b.balancePaidAt = b.paidAt;
   });
   if (!booking) return { ok: false, message: "Booking not found." };
   if (booking instanceof StateError) return { ok: false, message: booking.message };
@@ -226,6 +229,7 @@ export async function markNoShow(id: string, noShow: boolean): Promise<StaffResu
 export async function cancelBooking(id: string, reason: string): Promise<StaffResult> {
   const owner = await requireOwner();
   const booking = await transition(owner, id, ["pending", "awaiting_payment", "confirmed"], (b) => {
+    if (isEventHold(b)) throw new StateError(`This court is held for ${b.eventTitle ?? "an event"}. Move or cancel the event from Events.`);
     b.status = "cancelled";
     b.cancelledAt = new Date().toISOString();
     b.cancelReason = reason.trim().slice(0, 300) || undefined;
@@ -435,6 +439,7 @@ export async function editBooking(id: string, input: StaffBookingInput & { notif
   let moved = false;
   let blocked = false;
   const booking = await transition(owner, id, ["pending", "awaiting_payment", "confirmed"], (b) => {
+    if (b.eventId) throw new StateError(`This belongs to ${b.eventTitle ?? "an event"}. Change it from Events.`);
     blocked = !!b.blocked;
     moved = b.activitySlug !== input.activitySlug || b.resourceId !== input.resourceId || b.date !== input.date || b.startHour !== input.startHour || b.hours !== input.hours;
     // Fixing a phone number on a booking that's under way is fine; moving it into the past isn't.

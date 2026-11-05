@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getActivity } from "@/lib/activities";
-import { formatHourRange, formatMoney, type PaymentSettings } from "@/lib/facility";
+import { bookingPlace, bookingTime, formatInstant, isPast, isRegistration } from "@/lib/event-schedule";
+import { formatMoney, type PaymentSettings } from "@/lib/facility";
 import { getPublicOwnerById, ownerPath } from "@/lib/owners";
 import CancelForm from "./cancel-form";
 import PaymentReferenceForm from "./payment-reference-form";
@@ -47,12 +48,23 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
   const owner = await getPublicOwnerById(booking.ownerId);
   if (!owner) notFound();
   const activity = await getActivity(owner.id, booking.activitySlug);
-  const resource = activity?.resources.find((r) => r.id === booking.resourceId);
   const settings = await readSettings(owner.id);
-  const [icon, heading, subheading, color] = header(booking, settings, !!activity?.noDownpayment);
+  const registration = isRegistration(booking);
+  const [icon, heading, subheading, color] = registration ? registrationHeader(booking, settings) : header(booking, settings, !!activity?.noDownpayment);
   const now = facilityNow();
-  const cancellable = booking.status !== "cancelled" && (booking.date > now.date || (booking.date === now.date && booking.startHour > now.hour));
+  const cancellable =
+    booking.status !== "cancelled" &&
+    (booking.closesAt
+      ? !isPast(booking.closesAt)
+      : booking.date > now.date || (booking.date === now.date && booking.startHour > now.hour));
   const contact = owner.profile.phone || owner.profile.email;
+  const who = booking.teamName
+    ? [
+        ["Team", booking.teamName],
+        ["Players", (booking.teamPlayers ?? []).join(", ")],
+      ]
+    : [[registration ? "Spots" : "Players", String(registration ? (booking.spots ?? 1) : booking.players)]];
+  const paidUpFront = !!booking.downpayment && booking.downpayment >= booking.total;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
@@ -68,11 +80,12 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
       {booking.status === "awaiting_payment" && <PayNow booking={booking} settings={settings} token={token} />}
       <dl className="divide-y divide-black/5 px-6 text-sm">
         {[
+          ...(registration ? [["Event", booking.eventTitle ?? "Event"]] : []),
           ["Activity", `${activity?.emoji ?? ""} ${activity?.name ?? booking.activitySlug}`],
-          [activity?.resourceLabel ?? "Court", resource?.name ?? booking.resourceId],
+          ...(registration ? [] : [[activity?.resourceLabel ?? "Court", bookingPlace(booking, activity)]]),
           ["Date", formatDate(booking.date, { weekday: "long", month: "long", year: "numeric" })],
-          ["Time", formatHourRange(booking.startHour, booking.hours)],
-          ["Players", String(booking.players)],
+          ["Time", bookingTime(booking)],
+          ...who,
           ["Name", booking.name],
           ["Email", maskEmail(booking.email)],
           ["Phone", maskPhone(booking.phone)],
@@ -105,7 +118,13 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
             <dd className="font-bold text-emerald-700">{formatMoney(booking.total)}</dd>
           </div>
         )}
-        {!!booking.downpayment && booking.status !== "cancelled" && (
+        {paidUpFront && booking.status !== "cancelled" && (
+          <div className="flex justify-between py-3">
+            <dt className="text-black/50">Payment</dt>
+            <dd className="font-medium">{booking.status === "confirmed" ? "Received" : "Due now"}</dd>
+          </div>
+        )}
+        {!!booking.downpayment && !paidUpFront && booking.status !== "cancelled" && (
           <>
             <div className="flex justify-between py-3">
               <dt className="text-black/50">Downpayment</dt>
@@ -123,10 +142,10 @@ async function BookingDetails({ params }: { params: Promise<{ token: string }> }
       <div className="space-y-3 border-t border-black/5 bg-black/[0.02] px-6 py-5 text-center text-sm text-black/60">
         <p>
           {booking.status !== "cancelled" && "Please arrive 10 minutes early. "}
-          Need to change the time? Contact {owner.profile.name}
+          {registration ? "Questions?" : "Need to change the time?"} Contact {owner.profile.name}
           {contact ? ` at ${contact}` : ""} with your reference <span className="font-mono">{booking.id}</span>.
         </p>
-        {cancellable && <CancelForm token={token} paid={!!booking.paidAt && !!booking.downpayment} />}
+        {cancellable && <CancelForm token={token} paid={!!booking.paidAt && !!booking.downpayment} registration={registration} />}
         <p className="text-xs text-black/50">
           Bookmark this page to see your booking again. The link is private, so only share it with people in
           your group.
@@ -154,11 +173,25 @@ function header(b: Booking, settings: PaymentSettings, noDownpayment: boolean): 
   }
 }
 
+/** Headings for a hosted-event registration: no request step, so it's waiting for payment or confirmed. */
+function registrationHeader(b: Booking, settings: PaymentSettings): [string, string, string, string] {
+  const closes = b.closesAt ? ` and before registration closes (${formatInstant(b.closesAt)})` : "";
+  switch (b.status) {
+    case "pending":
+    case "awaiting_payment":
+      return ["💳", "Registered: pay to keep your spot", `Pay within ${settings.paymentWindowHours} hours${closes}, or your spot goes to someone else.`, "bg-amber-600"];
+    case "confirmed":
+      return ["✓", "You're in!", b.downpayment === 0 ? "Your spot is confirmed. Pay at the front desk when you arrive." : "Your payment is received and your spot is confirmed.", "bg-emerald-700"];
+    case "cancelled":
+      return ["✕", "Registration cancelled", b.cancelReason ? `Reason: ${b.cancelReason}` : "This registration is no longer active.", "bg-zinc-500"];
+  }
+}
+
 function PayNow({ booking, settings, token }: { booking: Booking; settings: PaymentSettings; token: string }) {
   const account = [settings.accountName, settings.accountNumber].filter(Boolean).join(" · ");
   return (
     <section className="border-b border-black/5 bg-amber-50/60 px-6 py-6 text-center">
-      <p className="text-sm text-black/60">Downpayment due</p>
+      <p className="text-sm text-black/60">{isRegistration(booking) ? "Amount due" : "Downpayment due"}</p>
       <p className="text-3xl font-bold">{formatMoney(booking.downpayment ?? booking.total)}</p>
       <p className="mt-1 text-sm text-black/60">via {settings.methodName}</p>
       {settings.qrPhoto && (

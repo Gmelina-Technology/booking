@@ -14,6 +14,23 @@ export function facilityNow(now: Date = new Date()): { date: string; hour: numbe
   return { date: `${get("year")}-${get("month")}-${get("day")}`, hour: Number(get("hour")) };
 }
 
+/** The instant (ms since epoch) of `minute` minutes after midnight on `date`, in the facility's time zone. */
+export function facilityInstant(date: string, minute: number): number {
+  const guess = Date.parse(`${date}T00:00:00Z`) + minute * 60_000;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: platform.timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(guess));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const local = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
+  return guess - (local - guess);
+}
+
 export function addDays(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);

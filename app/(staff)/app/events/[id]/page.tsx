@@ -16,7 +16,7 @@ export default function EditEventPage({ params }: PageProps<"/app/events/[id]">)
     <div className="mx-auto max-w-6xl px-4 py-10">
       <PageBanners />
       <Link href="/app/events" className="text-sm text-black/60 hover:underline">
-        ← Past events
+        ← Events
       </Link>
       <Suspense fallback={<div className="mt-4 h-96 animate-pulse rounded-2xl bg-black/5" />}>
         <EditEvent params={params} />

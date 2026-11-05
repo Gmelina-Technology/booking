@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { getActivity } from "./activities";
-import { formatHourRange } from "./facility";
+import { bookingPlace, bookingTime } from "./event-schedule";
 import { readNotifications, updateNotifications, type Booking } from "./store";
 import type { AppNotification, NotificationKind } from "./store-types";
 import { formatDate } from "./time";
@@ -19,13 +19,14 @@ const titles: Record<NotificationKind, (b: Booking) => string> = {
   payment_submitted: (b) => `${b.name} says they've paid`,
   hold_released: (b) => `Booking ${b.id} was released`,
   customer_cancelled: (b) => `${b.name} cancelled booking ${b.id}`,
+  event_registration: (b) => `${b.teamName || b.name} registered for ${b.eventTitle ?? "your event"}`,
 };
 
 /** "Basketball · Court 1 · Wed, Jan 15 · 9:00 AM – 11:00 AM", plus the payment reference when there is one. */
 async function describe(kind: NotificationKind, b: Booking) {
   const activity = await getActivity(b.ownerId, b.activitySlug);
-  const court = activity?.resources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId;
-  const when = `${formatDate(b.date, { weekday: "short", month: "short" })} · ${formatHourRange(b.startHour, b.hours)}`;
+  const court = bookingPlace(b, activity);
+  const when = `${formatDate(b.date, { weekday: "short", month: "short" })} · ${bookingTime(b)}`;
   const slot = `${activity?.name ?? b.activitySlug} · ${court} · ${when}`;
   if (kind === "payment_submitted") return `Ref ${b.paymentRef} · ${slot}`;
   if (kind === "hold_released") return `${b.cancelReason ?? "Cancelled automatically."} ${slot}`;

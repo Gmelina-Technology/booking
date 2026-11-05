@@ -23,7 +23,7 @@ export default async function PastEvents({ owner }: { owner: PublicOwner }) {
             <p className="text-sm font-semibold uppercase tracking-widest text-lime-300">Recent events</p>
             <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">What&apos;s been happening at {owner.profile.name}</h2>
             <p className="mt-2 max-w-xl text-white/70">
-              Tournaments, clinics, leagues and private events. Want to host your own? Talk to the front desk.
+              Tournaments, workshops, leagues and private events. Want to host your own? Talk to the front desk.
             </p>
           </div>
           <dl className="flex gap-6 sm:gap-8">

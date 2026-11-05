@@ -13,7 +13,7 @@ import type { PartnerStats } from "./platform-stats";
  */
 export type BookingStatus = "pending" | "awaiting_payment" | "confirmed" | "cancelled";
 
-export type EmailKind = "payment_request" | "confirmed" | "cancelled" | "rescheduled" | "payment_retry";
+export type EmailKind = "payment_request" | "confirmed" | "cancelled" | "rescheduled" | "payment_retry" | "event_cancelled";
 export type EmailLogEntry = { kind: EmailKind; at: string; ok: boolean; detail: string };
 
 export type Booking = {
@@ -74,6 +74,22 @@ export type Booking = {
   emails?: EmailLogEntry[];
   /** When staff erased the customer's personal details (name, email, phone, notes, payment reference). */
   erasedAt?: string;
+  /**
+   * The hosted event this belongs to (lib/hosted-events.ts): a court the event holds
+   * (`blocked`), or a registration for it (not blocked, `resourceId` "reg-<id>").
+   */
+  eventId?: string;
+  /** Hosted events: the event's title and exact times, copied on so lists can show them without reading the event. */
+  eventTitle?: string;
+  startMinute?: number;
+  endMinute?: number;
+  /** Registrations: when registration closes; an unpaid hold is released then (lib/holds.ts). */
+  closesAt?: string;
+  /** Registrations: spots taken (players, or 1 for a tournament team). */
+  spots?: number;
+  /** Tournament registrations: the team and its players. */
+  teamName?: string;
+  teamPlayers?: string[];
 };
 
 /** A business owner's account. Each one has a public page at /p/@<handle>. */
@@ -107,7 +123,7 @@ export type Owner = {
 export type PagePause = { at: string; message: string; until?: string };
 
 /** What a staff notification is about (lib/notifications.ts). */
-export type NotificationKind = "new_request" | "payment_submitted" | "hold_released" | "customer_cancelled";
+export type NotificationKind = "new_request" | "payment_submitted" | "hold_released" | "customer_cancelled" | "event_registration";
 
 /** One entry in the staff notification bell. */
 export type AppNotification = {
@@ -145,7 +161,7 @@ export type PlatformBookingFilter = {
 export type PlatformBookingSummary = PartnerStats & { ownerId: string; cancelled: number };
 
 /** The small JSON documents each owner has alongside their bookings. */
-export type DocKind = "activities" | "events" | "settings" | "hero" | "notifications";
+export type DocKind = "activities" | "events" | "hosted-events" | "settings" | "hero" | "notifications";
 
 /** Documents shared by the whole platform rather than one owner. */
 export type PlatformDocKind = "fees" | "view-as-log" | "partner-log" | "notifications" | "page-banners";
@@ -243,6 +259,14 @@ export interface StoreBackend {
   findBooking(by: "id" | "accessToken", value: string): Promise<Booking | undefined>;
   /** Inserts the booking, or returns false if it overlaps an active booking on the same court. */
   insertBooking(booking: Booking): Promise<boolean>;
+  /** Inserts all of the bookings or, if any overlaps an active booking on its court, none of them. */
+  insertBookings(bookings: Booking[]): Promise<boolean>;
+  /**
+   * Inserts a registration for a hosted event unless its spots would take the event's
+   * active registrations past `capacity`. Checked and inserted atomically, so two
+   * people can't both get the last spot.
+   */
+  insertRegistration(booking: Booking, capacity: number): Promise<"ok" | "full">;
   /**
    * Atomically applies `change`; if `change` throws, nothing is written and the error propagates.
    * Throws SlotTaken if the changed booking would overlap another active booking on its court.

@@ -5,14 +5,15 @@ import { cancelOwnBooking } from "@/app/actions";
 import { toast } from "@/app/toaster";
 
 /** "Cancel this booking" on the customer's private booking page, with a confirm step. */
-export default function CancelForm({ token, paid }: { token: string; paid: boolean }) {
+export default function CancelForm({ token, paid, registration = false }: { token: string; paid: boolean; registration?: boolean }) {
+  const what = registration ? "registration" : "booking";
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
 
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="text-sm font-medium text-red-700 hover:underline">
-        Cancel this booking
+        Cancel this {what}
       </button>
     );
   }
@@ -27,10 +28,10 @@ export default function CancelForm({ token, paid }: { token: string; paid: boole
       }}
       className="mx-auto max-w-sm space-y-3 rounded-xl border border-red-200 bg-white p-4 text-left"
     >
-      <p className="text-sm font-semibold text-black">Cancel this booking?</p>
+      <p className="text-sm font-semibold text-black">Cancel this {what}?</p>
       <p className="text-sm text-black/60">
-        The slot is released for other players.
-        {paid && " Your downpayment is refunded according to the business's policy, so contact them about it."}
+        {registration ? "Your spot is released for other players." : "The slot is released for other players."}
+        {paid && ` Your ${registration ? "payment" : "downpayment"} is refunded according to the business's policy, so contact them about it.`}
       </p>
       <label className="block text-sm">
         <span className="text-black/60">Reason (optional, shared with the business)</span>
