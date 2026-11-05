@@ -109,6 +109,7 @@ async function Footer({ params }: { params: Promise<{ handle: string }> }) {
         <Link href="/terms" className="hover:text-black/70 hover:underline">
           Terms
         </Link>
+        {" · "}Powered by Gmelina Technology
       </p>
     </div>
   );
