@@ -10,6 +10,6 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Marketing feature log
 
-Every PR that ships a customer-visible feature adds an entry to the top of
+Every PR that ships a customer-visible feature adds a page in `docs/marketing/features/` and a row at the top of
 [`docs/marketing/FEATURES.md`](docs/marketing/FEATURES.md) with its shipped date and
 `Published: —`. Format and rules: [`docs/marketing/README.md`](docs/marketing/README.md).

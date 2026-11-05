@@ -1,28 +1,42 @@
 # Marketing feature log
 
-Plain-language summaries of what CourtHub can do, for the marketing team. Each entry says
-what shipped, who it helps, and whether marketing has announced it yet.
+Plain-language write-ups of what CourtHub can do, for the marketing team.
 
-All entries live in [`FEATURES.md`](FEATURES.md), newest first.
+- [`FEATURES.md`](FEATURES.md) is the index: every feature, newest first, with its dates.
+- [`features/`](features/) has one page per feature covering what it does, who it helps and
+  talking points.
 
 ## Dates
 
-- **Shipped** — the day the feature was merged into the app (the PR merge date).
-- **Published** — the day marketing announced it (post, email, site update). Leave it as
-  `—` until then; marketing fills it in. Anything with `—` is still free to announce.
+- **Shipped** is the day the feature was merged into the app (the PR merge date).
+- **Published** is the day marketing announced it (a post, email or site update). Leave it as
+  `—` until then. Marketing fills it in on **both** the feature page and the index row.
+  Anything still showing `—` is free to announce.
 
-## Adding an entry (every new feature)
+## Adding a feature (every new feature)
 
-Add it to the top of `FEATURES.md` in the same PR as the feature:
+In the same PR as the feature:
 
-```md
-### <Feature name in customer words>
-- **Shipped:** YYYY-MM-DD · **Published:** —
-- **For:** Players | Partners | Platform admins
-- **PR:** #NN
+1. Create `features/YYYY-MM-DD-<short-name>.md` using the shipped date:
 
-One to three sentences on what it does and why someone would care. No code or internal terms.
-```
+   ```md
+   # <Feature name in customer words>
 
-Skip purely internal work (refactors, tests, pagination, CI) — only things a customer can
-see or use.
+   - **Shipped:** YYYY-MM-DD · **Published:** —
+   - **For:** Players | Partners | Everyone
+   - **PR:** #NN
+
+   ## In one line
+   What it does and why someone would care.
+
+   ## For partners / For players
+   - The key things people can now do.
+
+   ## Talking points
+   - Angles marketing can use.
+   ```
+
+2. Add a row to the top of the table in `FEATURES.md`.
+
+Write it for customers, with no code or internal terms. Skip purely internal work like
+refactors, tests, pagination and CI. Only include things a customer can see or use.
